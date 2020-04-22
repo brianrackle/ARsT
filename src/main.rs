@@ -1,8 +1,7 @@
 //Allow search of attribute metadata and quick response with matching results
-mod trie4;
+mod trie1;
 
 // use std::borrow::Borrow;
-
 
 fn main() {
     // datastructure for indexing documents

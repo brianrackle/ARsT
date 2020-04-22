@@ -43,14 +43,14 @@ impl Trie {
         value
             .chars()
             .next()
-            .map(|_| self.index.add_some(value, self.matching.borrow()));
+            .map(|_| self.index.add(value, self.matching.borrow()));
     }
 
     pub fn exists(&self, value: &String) -> bool {
         let mut cur = &self.index;
 
         for c in self.set_case(value).chars() {
-            match cur.char_exists(c) {
+            match cur.exists(c) {
                 Some(t) => {
                     cur = &t;
                 }
@@ -73,6 +73,40 @@ impl Trie {
     }
 }
 
+enum NodeEnum {
+    N4(Box<Node4>),
+    N16(Box<Node16>),
+    N48(Box<Node48>),
+    N256(Box<Node256>),
+}
+
+//nodes need to upgrade to be able to upgrade to a new type
+//define trait for Node
+trait TrieNode {
+    fn new() -> Self;
+    fn add(&mut self, value: &String, match_type: &Match);
+    fn exists(&self, c: char) -> Option<&NodeEnum>;
+}
+
+struct Node4 {
+    keys: [char; 4],
+    children: [NodeEnum; 4],
+}
+
+struct Node16 {
+    keys: [char; 16],
+    children: [NodeEnum; 16],
+}
+
+struct Node48 {
+    keys: [u8; 256],
+    children: [NodeEnum; 48],
+}
+
+struct Node256 {
+    children: [NodeEnum; 256],
+}
+
 impl Node {
     //TODO: index json and store path
     //TODO: make variable length based off settings
@@ -80,13 +114,9 @@ impl Node {
         Node {
             children: arr![None; 257],
         }
-        //4   -> Keys [char; 4] / Links [None; 4]   -> Unsorted Linear search
-        //16  -> Keys [char; 16] / Links [None; 16] -> Sorted Binary search
-        //48  -> Keys [u8 (actually only need 6 bits; 256] / Links [None; 48]  -> Radix lookup
-        //256 -> Links [None; 256]                  -> Radix lookup
     }
 
-    fn add_some(&mut self, value: &String, match_type: &Match) {
+    fn add(&mut self, value: &String, match_type: &Match) {
         match match_type {
             Match::Exact | Match::Prefix => {
                 let mut cur = self;
@@ -97,9 +127,8 @@ impl Node {
                     }
                 }
                 //add terminal char when match is exact
-                match match_type {
-                    Match::Exact => cur.children[257 - 1] = Some(Box::new(Node::new())),
-                    _ => (),
+                if let Match::Exact = match_type {
+                    cur.children[257 - 1] = Some(Box::new(Node::new()))
                 }
             }
             Match::PrefixPostfix => {
@@ -118,7 +147,7 @@ impl Node {
         }
     }
 
-    fn char_exists(&self, c: char) -> Option<&Node> {
+    fn exists(&self, c: char) -> Option<&Node> {
         Node::char_to_usize(c).and_then(|i| self.children[i].as_ref().map(|c| c.as_ref()))
     }
 

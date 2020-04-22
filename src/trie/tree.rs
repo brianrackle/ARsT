@@ -1,33 +1,11 @@
-use arr_macro::arr;
+use crate::trie::enums::{Case, Match};
+use crate::trie::node::{Link, Node, Node16, Node256, Node4, Node48, NodeEnum};
 use std::borrow::Borrow;
 
 pub struct Trie {
     matching: Match,
     case: Case,
     index: Node, //change this to Link for consistency
-}
-
-pub enum Match {
-    Exact,
-    Prefix,
-    PrefixPostfix,
-}
-
-pub enum Case {
-    Sensitive,
-    Insensitve,
-}
-
-type Link = Option<Box<Node>>;
-
-//optimize leaf so it doesnt store array
-struct Node {
-    children: [Link; 257],
-}
-
-enum LinkId {
-    End,
-    Char(char),
 }
 
 impl Trie {
@@ -60,7 +38,7 @@ impl Trie {
 
         //look for terminal character if exact match
         match self.matching {
-            Match::Exact => cur.children[256].is_some(),
+            Match::Exact => cur.get_node(256).is_some(),
             _ => true,
         }
     }
@@ -73,99 +51,13 @@ impl Trie {
     }
 }
 
-enum NodeEnum {
-    N4(Box<Node4>),
-    N16(Box<Node16>),
-    N48(Box<Node48>),
-    N256(Box<Node256>),
-}
-
-//nodes need to upgrade to be able to upgrade to a new type
-//define trait for Node
-trait TrieNode {
-    fn new() -> Self;
-    fn add(&mut self, value: &String, match_type: &Match);
-    fn exists(&self, c: char) -> Option<&NodeEnum>;
-}
-
-struct Node4 {
-    keys: [char; 4],
-    children: [NodeEnum; 4],
-}
-
-struct Node16 {
-    keys: [char; 16],
-    children: [NodeEnum; 16],
-}
-
-struct Node48 {
-    keys: [u8; 256],
-    children: [NodeEnum; 48],
-}
-
-struct Node256 {
-    children: [NodeEnum; 256],
-}
-
-impl Node {
-    //TODO: index json and store path
-    //TODO: make variable length based off settings
-    fn new() -> Self {
-        Node {
-            children: arr![None; 257],
-        }
-    }
-
-    fn add(&mut self, value: &String, match_type: &Match) {
-        match match_type {
-            Match::Exact | Match::Prefix => {
-                let mut cur = self;
-                for c in value.chars() {
-                    cur = match Node::char_to_usize(c) {
-                        None => cur, //ignore char and move to next one
-                        Some(i) => cur.children[i].get_or_insert(Box::new(Node::new())),
-                    }
-                }
-                //add terminal char when match is exact
-                if let Match::Exact = match_type {
-                    cur.children[257 - 1] = Some(Box::new(Node::new()))
-                }
-            }
-            Match::PrefixPostfix => {
-                //takes 0+n first characters off string
-                let mut cur: &mut Node;
-                for j in 0..value.len() {
-                    cur = self;
-                    for c in value[j..].chars() {
-                        cur = match Node::char_to_usize(c) {
-                            None => cur,
-                            Some(i) => cur.children[i].get_or_insert(Box::new(Node::new())),
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    fn exists(&self, c: char) -> Option<&Node> {
-        Node::char_to_usize(c).and_then(|i| self.children[i].as_ref().map(|c| c.as_ref()))
-    }
-
-    fn char_to_usize(c: char) -> Option<usize> {
-        let int = c as usize;
-        match int {
-            x if x < 257 => Some(x),
-            _ => Option::None,
-        }
-    }
-}
-
 #[cfg(test)] //module should only be compiled for testing
 mod test {
     use super::{Case, Match, Node, Trie};
+    use crate::trie::helpers;
 
     fn ctu(c: char) -> usize {
-        Node::char_to_usize(c).expect("ERR")
+        helpers::char_to_usize(c).expect("ERR")
     }
 
     //doesnt check terminal char
@@ -175,7 +67,7 @@ mod test {
             let mut schar = String::new();
             schar.push(i as char);
             let contain = s.contains(&schar);
-            let should_contain = match &n.children[i as usize] {
+            let should_contain = match &n.get_node(i as usize) {
                 None => false,
                 Some(c) => true,
             };
@@ -194,13 +86,13 @@ mod test {
             let mut trie = Trie::new(Match::Exact, Case::Sensitive);
             trie.add(&"abc".to_owned());
 
-            let char_1 = trie.index.children[ctu('a')].as_ref();
+            let char_1 = trie.index.get_node(ctu('a'));
             assert!(only_has_chars(&trie.index, "a".to_owned()));
-            let char_2 = char_1.expect("ERR").children[ctu('b')].as_ref();
+            let char_2 = char_1.expect("ERR").get_node(ctu('b'));
             assert!(only_has_chars(&char_1.expect("ERR"), "b".to_owned()));
-            let char_3 = char_2.expect("ERR").children[ctu('c')].as_ref();
+            let char_3 = char_2.expect("ERR").get_node(ctu('c'));
             assert!(only_has_chars(&char_2.expect("ERR"), "c".to_owned()));
-            let char_4 = char_3.expect("ERR").children[256].as_ref();
+            let char_4 = char_3.expect("ERR").get_node(256);
             assert!(char_4.is_some());
         }
 
@@ -209,13 +101,13 @@ mod test {
             let mut trie = Trie::new(Match::Prefix, Case::Sensitive);
             trie.add(&"abc".to_owned());
 
-            let char_1 = trie.index.children[ctu('a')].as_ref();
+            let char_1 = trie.index.get_node(ctu('a'));
             assert!(only_has_chars(&trie.index, "a".to_owned()));
-            let char_2 = char_1.expect("ERR").children[ctu('b')].as_ref();
+            let char_2 = char_1.expect("ERR").get_node(ctu('b'));
             assert!(only_has_chars(&char_1.expect("ERR"), "b".to_owned()));
-            let char_3 = char_2.expect("ERR").children[ctu('c')].as_ref();
+            let char_3 = char_2.expect("ERR").get_node(ctu('c'));
             assert!(only_has_chars(&char_2.expect("ERR"), "c".to_owned()));
-            let char_4 = char_3.expect("ERR").children[256].as_ref();
+            let char_4 = char_3.expect("ERR").get_node(256);
             assert!(!char_4.is_some());
         }
 
@@ -224,9 +116,9 @@ mod test {
             let mut trie = Trie::new(Match::PrefixPostfix, Case::Sensitive);
             trie.add(&"abcd".to_owned());
 
-            let char_1 = trie.index.children[ctu('a')].as_ref();
+            let char_1 = trie.index.get_node(ctu('a'));
             assert!(only_has_chars(&trie.index, "abcd".to_owned()));
-            let char_2 = char_1.expect("ERR").children[ctu('b')].as_ref();
+            let char_2 = char_1.expect("ERR").get_node(ctu('b'));
             assert!(only_has_chars(&char_2.expect("ERR"), "c".to_owned()));
         }
     }

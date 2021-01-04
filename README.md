@@ -1,2 +1,2 @@
-# ART
-A Adaptive Radix Tree implementation in Rust
+# ARsT
+An Adaptive Radix Tree implementation in Rust

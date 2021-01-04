@@ -1,2 +1,2 @@
-# ShART
-A short Adaptive Radix Tree implementation in Rust
+# ART
+A Adaptive Radix Tree implementation in Rust

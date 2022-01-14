@@ -17,14 +17,14 @@ impl Trie {
         }
     }
 
-    pub fn add(&mut self, value: &String) {
+    pub fn add(&mut self, value: &str) {
         value
             .chars()
             .next()
-            .map(|_| self.index.add(value, self.matching.borrow()));
+            .map(|_| self.index.add(value, &self.matching));
     }
 
-    pub fn exists(&self, value: &String) -> bool {
+    pub fn exists(&self, value: &str) -> bool {
         let mut cur = &self.index;
 
         for c in self.set_case(value).chars() {
@@ -43,10 +43,10 @@ impl Trie {
         }
     }
 
-    fn set_case(&self, value: &String) -> String {
+    fn set_case(&self, value: &str) -> String {
         match self.case {
             Case::Insensitve => value.to_lowercase(),
-            Case::Sensitive => value.clone(),
+            Case::Sensitive => String::from(value),
         }
     }
 }
@@ -61,22 +61,14 @@ mod test {
     }
 
     //doesnt check terminal char
-    fn only_has_chars(n: &Node, s: String) -> bool {
-        let mut result = true;
+    fn only_has_chars(n: &Node, s: &str) -> bool {
         for i in 0_u8..255_u8 {
-            let mut schar = String::new();
-            schar.push(i as char);
-            let contain = s.contains(&schar);
-            let should_contain = match &n.get_node(i as usize) {
-                None => false,
-                Some(c) => true,
-            };
-            if contain != should_contain {
-                result = false;
-                break;
+            let contain = s.contains(&String::from(i as char));
+            if contain != n.get_node(i as usize).is_some() {
+                return false
             }
         }
-        result
+        true
     }
 
     #[test]
@@ -84,110 +76,110 @@ mod test {
         {
             //EXACT
             let mut trie = Trie::new(Match::Exact, Case::Sensitive);
-            trie.add(&"abc".to_owned());
+            trie.add(&"abc");
 
-            let char_1 = trie.index.get_node(ctu('a'));
-            assert!(only_has_chars(&trie.index, "a".to_owned()));
-            let char_2 = char_1.expect("ERR").get_node(ctu('b'));
-            assert!(only_has_chars(&char_1.expect("ERR"), "b".to_owned()));
-            let char_3 = char_2.expect("ERR").get_node(ctu('c'));
-            assert!(only_has_chars(&char_2.expect("ERR"), "c".to_owned()));
-            let char_4 = char_3.expect("ERR").get_node(256);
+            let char_1 = trie.index.get_node(ctu('a')).unwrap();
+            assert!(only_has_chars(&trie.index, "a"));
+            let char_2 = char_1.get_node(ctu('b')).unwrap();
+            assert!(only_has_chars(&char_1, "b"));
+            let char_3 = char_2.get_node(ctu('c')).unwrap();
+            assert!(only_has_chars(&char_2, "c"));
+            let char_4 = char_3.get_node(256);
             assert!(char_4.is_some());
         }
 
         {
             //PREFIX
             let mut trie = Trie::new(Match::Prefix, Case::Sensitive);
-            trie.add(&"abc".to_owned());
+            trie.add(&"abc");
 
-            let char_1 = trie.index.get_node(ctu('a'));
-            assert!(only_has_chars(&trie.index, "a".to_owned()));
-            let char_2 = char_1.expect("ERR").get_node(ctu('b'));
-            assert!(only_has_chars(&char_1.expect("ERR"), "b".to_owned()));
-            let char_3 = char_2.expect("ERR").get_node(ctu('c'));
-            assert!(only_has_chars(&char_2.expect("ERR"), "c".to_owned()));
-            let char_4 = char_3.expect("ERR").get_node(256);
+            let char_1 = trie.index.get_node(ctu('a')).unwrap();
+            assert!(only_has_chars(&trie.index, "a"));
+            let char_2 = char_1.get_node(ctu('b')).unwrap();
+            assert!(only_has_chars(&char_1, "b"));
+            let char_3 = char_2.get_node(ctu('c')).unwrap();
+            assert!(only_has_chars(&char_2, "c"));
+            let char_4 = char_3.get_node(256);
             assert!(!char_4.is_some());
         }
 
         {
             //PREFIXPOSTFIX
             let mut trie = Trie::new(Match::PrefixPostfix, Case::Sensitive);
-            trie.add(&"abcd".to_owned());
+            trie.add(&"abcd");
 
-            let char_1 = trie.index.get_node(ctu('a'));
-            assert!(only_has_chars(&trie.index, "abcd".to_owned()));
-            let char_2 = char_1.expect("ERR").get_node(ctu('b'));
-            assert!(only_has_chars(&char_2.expect("ERR"), "c".to_owned()));
+            let char_1 = trie.index.get_node(ctu('a')).unwrap();
+            assert!(only_has_chars(&trie.index, "abcd"));
+            let char_2 = char_1.get_node(ctu('b')).unwrap();
+            assert!(only_has_chars(&char_2, "c"));
         }
     }
 
     #[test]
     fn match_empty() {
         let mut trie = Trie::new(Match::Prefix, Case::Sensitive);
-        trie.add(&"".to_owned());
-        assert!(trie.exists(&"".to_owned()))
+        trie.add(&"");
+        assert!(trie.exists(&""))
     }
 
     #[test]
     fn match_no_empty() {
         let trie = Trie::new(Match::Prefix, Case::Sensitive);
-        assert!(trie.exists(&"".to_owned()))
+        assert!(trie.exists(&""))
     }
 
     #[test]
     fn match_char() {
         let mut trie = Trie::new(Match::Prefix, Case::Sensitive);
-        trie.add(&"a".to_owned());
+        trie.add(&"a");
 
-        assert!(trie.exists(&"a".to_owned()));
-        assert!(!trie.exists(&"A".to_owned()));
+        assert!(trie.exists(&"a"));
+        assert!(!trie.exists(&"A"));
     }
 
     #[test]
     fn match_string_case_sensitive() {
         {
             let mut trie = Trie::new(Match::Exact, Case::Sensitive);
-            trie.add(&"abcde".to_owned());
-            trie.add(&"abc".to_owned());
+            trie.add(&"abcde");
+            trie.add(&"abc");
 
-            assert!(trie.exists(&"abcde".to_owned()));
-            assert!(trie.exists(&"abc".to_owned()));
-            assert!(!trie.exists(&"ab".to_owned()));
-            assert!(!trie.exists(&"ABCDE".to_owned()));
+            assert!(trie.exists(&"abcde"));
+            assert!(trie.exists(&"abc"));
+            assert!(!trie.exists(&"ab"));
+            assert!(!trie.exists(&"ABCDE"));
         }
 
         {
             let mut trie = Trie::new(Match::Prefix, Case::Sensitive);
-            trie.add(&"abcde".to_owned());
-            trie.add(&"abc".to_owned());
+            trie.add(&"abcde");
+            trie.add(&"abc");
 
-            assert!(trie.exists(&"abcde".to_owned()));
-            assert!(trie.exists(&"abc".to_owned()));
-            assert!(trie.exists(&"ab".to_owned()));
-            assert!(!trie.exists(&"ABCDE".to_owned()));
+            assert!(trie.exists(&"abcde"));
+            assert!(trie.exists(&"abc"));
+            assert!(trie.exists(&"ab"));
+            assert!(!trie.exists(&"ABCDE"));
         }
 
         {
             let mut trie = Trie::new(Match::PrefixPostfix, Case::Sensitive);
-            trie.add(&"abcde".to_owned());
+            trie.add(&"abcde");
 
-            assert!(trie.exists(&"abcde".to_owned()));
-            assert!(trie.exists(&"abc".to_owned()));
-            assert!(trie.exists(&"ab".to_owned()));
-            assert!(trie.exists(&"bcde".to_owned()));
-            assert!(trie.exists(&"cd".to_owned()));
-            assert!(!trie.exists(&"ABCDE".to_owned()));
+            assert!(trie.exists(&"abcde"));
+            assert!(trie.exists(&"abc"));
+            assert!(trie.exists(&"ab"));
+            assert!(trie.exists(&"bcde"));
+            assert!(trie.exists(&"cd"));
+            assert!(!trie.exists(&"ABCDE"));
         }
     }
 
     #[test]
     fn no_match_string() {
         let mut trie = Trie::new(Match::Prefix, Case::Sensitive);
-        trie.add(&"abc".to_owned());
+        trie.add(&"abc");
 
-        assert!(!trie.exists(&"bc".to_owned()));
-        assert!(!trie.exists(&"AB".to_owned())); //partial complete match
+        assert!(!trie.exists(&"bc"));
+        assert!(!trie.exists(&"AB")); //partial complete match
     }
 }

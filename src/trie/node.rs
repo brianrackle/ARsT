@@ -20,7 +20,7 @@ pub enum NodeEnum {
 //define trait for Node
 trait TrieNode {
     fn new() -> Self;
-    fn add(&mut self, value: &String, match_type: &Match);
+    fn add(&mut self, value: &str, match_type: &Match);
     fn exists(&self, c: char) -> Option<&NodeEnum>;
 }
 
@@ -44,7 +44,6 @@ pub struct Node256 {
 }
 
 impl Node {
-    //TODO: index json and store path
     //TODO: make variable length based off settings
     pub fn new() -> Self {
         Node {
@@ -56,7 +55,7 @@ impl Node {
         self.children[i].as_ref().map(|c| c.as_ref())
     }
 
-    pub fn add(&mut self, value: &String, match_type: &Match) {
+    pub fn add(&mut self, value: &str, match_type: &Match) {
         match match_type {
             Match::Exact | Match::Prefix => {
                 let mut cur = self;

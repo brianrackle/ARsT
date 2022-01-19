@@ -3,22 +3,34 @@ use arr_macro::arr;
 
 // //nodes need to be able to upgrade to a new type
 //trienode trait provides
-trait TrieNode {
-    //fn from() -> Self; //creates new trienode based on a lesser sized trienode
-    fn add(&mut self, value: &u8, match_type: &Match);
-    fn exists(&self, c: char) -> Box<&dyn TrieNode>;
-    fn get_size(&self) -> usize;
-    fn get_capacity(&self) -> usize;
-    fn is_terminal(&self) -> bool;
+// trait TrieNode {
+//     //fn from() -> Self; //creates new trienode based on a lesser sized trienode
+//     fn add(&mut self, value: &u8, match_type: &Match);
+//     fn exists(&self, c: char) -> Box<&dyn TrieNode>;
+//     fn get_size(&self) -> usize;
+//     fn get_capacity(&self) -> usize;
+//     fn is_terminal(&self) -> bool;
+//
+//     fn is_full(&self) -> bool {
+//         self.get_size() == self.get_capacity()
+//     }
+//     fn is_empty(&self) -> bool {
+//         self.get_size() == 0
+//     }
+// }
 
-    fn is_full(&self) -> bool {
-        self.get_size() == self.get_capacity()
+pub trait TrieNode {
+    fn add(self, value: &[u8], match_type: &Match) -> NodeEnum where Self: Sized {
+        match value {
+            [] => self.add_empty_case(),
+            [only_value] => self.add_single_case(only_value, match_type),
+            [first_value, remaining_values @..] => self.add_multiple_case(first_value, remaining_values, match_type)
+        }
     }
-    fn is_empty(&self) -> bool {
-        self.get_size() == 0
-    }
+    fn add_empty_case(self) -> NodeEnum;
+    fn add_single_case(self, only_value :&u8, match_type :&Match) -> NodeEnum;
+    fn add_multiple_case(self, first_value :&u8, remaining_values :&[u8], match_type :&Match) -> NodeEnum;
 }
-
 
 pub struct Node0 {} //is_terminal should always be true for Node0, not sure if this is needed used only when leaf node is created
 
@@ -70,23 +82,11 @@ impl Default for NodeEnum {
 
 impl Node0 {
     pub fn new() -> Self {
-        Node0{}
+        Node0 {}
     }
+}
 
-    fn add_cases(
-        self,
-        value :&[u8],
-        match_type :&Match,
-        empty_case :fn(Node0) -> NodeEnum,
-        single_case :fn(Node0, &u8, &Match) -> NodeEnum,
-        multiple_case :fn(Node0, &u8, &[u8], &Match) -> NodeEnum) -> NodeEnum {
-        match value {
-            [] => empty_case(self),
-            [only] => single_case(self, only, match_type),
-            [first, rest @..] => multiple_case(self, first, rest, match_type)
-        }
-    }
-
+impl TrieNode for Node0 {
     fn add_empty_case(self) -> NodeEnum {
         NodeEnum::N0(self)
     }
@@ -115,11 +115,6 @@ impl Node0 {
             size: 1, //can be used to remove need for Option
             terminal: false //update this if its last value in string
         })
-    }
-
-    //could then move add_cases to trait and have structs implement empty_case, single_case, multiple_case
-    pub fn add(self, value: &[u8], match_type: &Match) -> NodeEnum {
-        self.add_cases(value, match_type, Node0::add_empty_case, Node0::add_single_case, Node0::add_multiple_case)
     }
 }
 

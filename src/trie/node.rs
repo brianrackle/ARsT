@@ -84,6 +84,12 @@ pub enum NodeEnum {
     N256(Node256)
 }
 
+
+impl NodeEnum {
+    pub fn take(&mut self) -> NodeEnum {
+        mem::replace(self, NNone)
+    }
+}
 impl Default for NodeEnum {
     fn default() -> Self {
         NodeEnum::NNone
@@ -105,6 +111,7 @@ impl TrieNode for Node0 {
     }
 
     fn add_single_case(mut self, only_value :&u8, match_type :&Match) -> NodeEnum {
+
         let mut keys = [None; 4];
         let mut children = Box::new(arr![NodeEnum::NNone; 4]);
         keys[0] = Some(*only_value);
@@ -144,13 +151,17 @@ impl TrieNode for Node0 {
 }
 
 impl Node4 {
-    pub fn new() -> Self {
+    pub fn new(terminal :bool) -> Self {
         Node4 {
             keys: [None; 4],
             children: Box::new(arr![NodeEnum::NNone; 4]),
             size: 0,
-            terminal: false
+            terminal
         }
+    }
+
+    pub fn from(mut node :Node0) -> Self {
+        Node4::new(node.terminal)
     }
 }
 
@@ -161,23 +172,19 @@ impl TrieNode for Node4 {
     }
 
     fn add_single_case(mut self, only_value :&u8, match_type :&Match) -> NodeEnum {
-        // let mut keys = [None; 4];
-        // let mut children = Box::new(arr![NodeEnum::NNone; 4]);
-
-
         //check if value exists already
         if let Some(index) = self.keys.iter().position(|v| v.is_some() && v.unwrap() == *only_value) {
-            //self.children[index].add()
-            todo!()
+            //TODO: look at implementing a swap function or changing add to mutable borrow
+            self.children[index] = self.children[index].take().add_empty_case();
+            NodeEnum::N4(self)
         } else { //value doesnt exist yet
-
+            //expand to node16 and then add new value
             if self.is_full() {
-                //expand to node16
                 Node16::from(self).add_single_case(only_value, match_type)
-            } else {
-                self.keys[self.size] = Some(*only_value); //
-                //children
-                todo!()
+            } else { //add value to existing Node4 if there is room
+                self.keys[self.size] = Some(*only_value);
+                self.children[self.size] = Node0::new(false).add_empty_case();
+                NodeEnum::N4(self)
             }
         }
     }
@@ -209,50 +216,21 @@ impl TrieNode for Node4 {
     }
 }
 
-//     pub fn add(self, value: &[u8], match_type: &Match) -> NodeEnum {
-//         // let mut keys = [None; 4];
-//         // let mut children = Box::new(arr![NodeEnum::NNone; 4]);
-//         match value {
-//             [] => {
-//                 //should not occur because node starts from new_node0
-//                 unimplemented!()
-//             }
-//             [only] => {
-//                 // keys[0] = Some(*only);
-//                 // children[0] = NodeEnum::N0(Node0::new());
-//             }
-//             [first, rest @..] => {
-//                 // keys[0] = Some(*first);
-//                 // children[0] = NodeEnum::N4(Node4::new());
-//             }
-//         }
-//
-//         todo!()
-//         // NodeEnum::N4(Node4 {
-//         //     keys: keys,
-//         //     children: children,
-//         //     size: 1, //can be used to remove need for Option
-//         //     terminal: false //update this if its last value in string
-//         // })
-//     }
-// }
-
 impl Node16 {
     //keys stored sorted
-    pub fn new() -> Self {
+    pub fn new(terminal :bool) -> Self {
         Node16 {
             keys: [None; 16],
             children: Box::new(arr![NodeEnum::NNone; 16]),
             size: 0,
-            terminal: false
+            terminal
         }
     }
 
-    //TODO: should be node + value?
     pub fn from(mut node :Node4) -> Self {
-        let mut new_node = Node16::new();
+        let mut new_node = Node16::new(node.terminal);
 
-        //sort the keys and original indices
+        //sort the keys and original indices of the keys
         //the original indices will be used to create new arrays with the correct order
         let ordered_index = {
             let mut ordered_index_value = new_node.keys.iter().enumerate().collect::<Vec<_>>();
@@ -265,7 +243,7 @@ impl Node16 {
         //order arrays based on the ordered indices
         for (target_i, source_i) in ordered_index.iter().enumerate() {
             new_node.keys[target_i] = node.keys[*source_i].take();
-            new_node.children[target_i] = mem::replace(&mut node.children[*source_i], NNone); //same function used by take
+            new_node.children[target_i] = node.children[*source_i].take(); //same function used by Option::take to replace element
         }
 
         new_node.size = node.size;
@@ -302,12 +280,12 @@ impl TrieNode for Node16 {
 }
 
 impl Node48 {
-    pub fn new() -> Self {
+    pub fn new(terminal :bool) -> Self {
         Node48 {
             keys: [None; 256],
             children: Box::new(arr![NodeEnum::NNone; 48]),
             size: 0,
-            terminal: false
+            terminal
         }
     }
 
@@ -343,11 +321,11 @@ impl TrieNode for Node48 {
 }
 
 impl Node256 {
-    pub fn new() -> Self {
+    pub fn new(terminal :bool) -> Self {
         Node256 {
             children: Box::new(arr![NodeEnum::NNone; 256]),
             size: 0,
-            terminal: false
+            terminal
         }
     }
 

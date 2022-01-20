@@ -1,5 +1,10 @@
+use std::cmp::Ordering;
+use std::convert::TryInto;
+use std::mem;
+use std::ops::Index;
 use crate::trie::enums::{Case, Match};
 use arr_macro::arr;
+use crate::trie::node::NodeEnum::NNone;
 
 // //nodes need to be able to upgrade to a new type
 //trienode trait provides
@@ -19,8 +24,8 @@ use arr_macro::arr;
 //     }
 // }
 
-pub trait TrieNode {
-    fn add(self, value: &[u8], match_type: &Match) -> NodeEnum where Self: Sized {
+pub trait TrieNode: Sized {
+    fn add(mut self, value: &[u8], match_type: &Match) -> NodeEnum {
         match value {
             [] => self.add_empty_case(),
             [only_value] => self.add_single_case(only_value, match_type),
@@ -30,15 +35,20 @@ pub trait TrieNode {
     fn add_empty_case(self) -> NodeEnum;
     fn add_single_case(self, only_value :&u8, match_type :&Match) -> NodeEnum;
     fn add_multiple_case(self, first_value :&u8, remaining_values :&[u8], match_type :&Match) -> NodeEnum;
+    fn is_full(&self) -> bool;
+    fn is_empty(&self) -> bool;
+    fn is_terminal(&self) -> bool;
 }
 
-pub struct Node0 {} //is_terminal should always be true for Node0, not sure if this is needed used only when leaf node is created
+pub struct Node0 {
+    terminal: bool
+}
 
 pub struct Node4 {
 keys: [Option<u8>; 4],
 //Can remove this option and rely only on children option
 children: Box<[NodeEnum; 4]>,
-size: u8,
+size: usize,
 terminal: bool,
 }
 
@@ -46,7 +56,7 @@ pub struct Node16 {
 keys: [Option<u8>; 16],
 //value represents value with matching node in children index
 children: Box<[NodeEnum; 16]>,
-size: u8,
+size: usize,
 terminal: bool,
 }
 
@@ -54,13 +64,13 @@ pub struct Node48 {
 keys: [Option<u8>; 256],
 //index represents value, and value represents index in children
 children: Box<[NodeEnum; 48]>,
-size: u8,
+size: usize,
 terminal: bool,
 }
 
 pub struct Node256 {
 children: Box<[NodeEnum; 256]>,
-size: u8,
+size: usize,
 terminal: bool,
 }
 
@@ -81,40 +91,55 @@ impl Default for NodeEnum {
 }
 
 impl Node0 {
-    pub fn new() -> Self {
-        Node0 {}
+    pub fn new(terminal :bool) -> Self {
+        Node0 {
+            terminal
+        }
     }
 }
 
 impl TrieNode for Node0 {
-    fn add_empty_case(self) -> NodeEnum {
+    fn add_empty_case(mut self) -> NodeEnum {
+        self.terminal = true;
         NodeEnum::N0(self)
     }
 
-    fn add_single_case(self, only_value :&u8, match_type :&Match) -> NodeEnum {
+    fn add_single_case(mut self, only_value :&u8, match_type :&Match) -> NodeEnum {
         let mut keys = [None; 4];
         let mut children = Box::new(arr![NodeEnum::NNone; 4]);
         keys[0] = Some(*only_value);
-        children[0] = Node0::new().add(&[], match_type);
+        children[0] = Node0::new(true).add(&[], match_type); //current node is last value so next node is terminal
         NodeEnum::N4(Node4 {
-            keys: keys,
-            children: children,
-            size: 1, //can be used to remove need for Option
-            terminal: false //update this if its last value in string
+            keys,
+            children,
+            size: 1,
+            terminal: self.terminal //update this if its last value in string
         })
     }
 
-    fn add_multiple_case(self, first_value :&u8, remaining_values :&[u8], match_type :&Match) -> NodeEnum {
+    fn add_multiple_case(mut self, first_value :&u8, remaining_values :&[u8], match_type :&Match) -> NodeEnum {
         let mut keys = [None; 4];
         let mut children = Box::new(arr![NodeEnum::NNone; 4]);
         keys[0] = Some(*first_value);
         children[0] = Node4::new().add(remaining_values, match_type);
         NodeEnum::N4(Node4 {
-            keys: keys,
-            children: children,
+            keys,
+            children,
             size: 1, //can be used to remove need for Option
-            terminal: false //update this if its last value in string
+            terminal: self.terminal //update this if its last value in string
         })
+    }
+
+    fn is_full(&self) -> bool {
+        true
+    }
+
+    fn is_empty(&self) -> bool {
+        false
+    }
+
+    fn is_terminal(&self) -> bool {
+        self.terminal
     }
 }
 
@@ -127,36 +152,93 @@ impl Node4 {
             terminal: false
         }
     }
+}
 
-    pub fn add(self, value: &[u8], match_type: &Match) -> NodeEnum {
+impl TrieNode for Node4 {
+    fn add_empty_case(mut self) -> NodeEnum {
+        self.terminal = true;
+        NodeEnum::N4(self)
+    }
+
+    fn add_single_case(mut self, only_value :&u8, match_type :&Match) -> NodeEnum {
         // let mut keys = [None; 4];
         // let mut children = Box::new(arr![NodeEnum::NNone; 4]);
-        match value {
-            [] => {
-                //should not occur because node starts from new_node0
-                unimplemented!()
-            }
-            [only] => {
-                // keys[0] = Some(*only);
-                // children[0] = NodeEnum::N0(Node0::new());
-            }
-            [first, rest @..] => {
-                // keys[0] = Some(*first);
-                // children[0] = NodeEnum::N4(Node4::new());
+
+
+        //check if value exists already
+        if let Some(index) = self.keys.iter().position(|v| v.is_some() && v.unwrap() == *only_value) {
+            //self.children[index].add()
+            todo!()
+        } else { //value doesnt exist yet
+
+            if self.is_full() {
+                //expand to node16
+                Node16::from(self).add_single_case(only_value, match_type)
+            } else {
+                self.keys[self.size] = Some(*only_value); //
+                //children
+                todo!()
             }
         }
+    }
 
-        todo!()
+    fn add_multiple_case(mut self, first_value :&u8, remaining_values :&[u8], match_type :&Match) -> NodeEnum {
+        // let mut keys = [None; 4];
+        // let mut children = Box::new(arr![NodeEnum::NNone; 4]);
+        // keys[0] = Some(*first_value);
+        // children[0] = Node4::new().add(remaining_values, match_type);
         // NodeEnum::N4(Node4 {
         //     keys: keys,
         //     children: children,
         //     size: 1, //can be used to remove need for Option
         //     terminal: false //update this if its last value in string
         // })
+        todo!()
+    }
+
+    fn is_full(&self) -> bool {
+        self.size == self.children.len()
+    }
+
+    fn is_empty(&self) -> bool {
+        self.size == 0
+    }
+
+    fn is_terminal(&self) -> bool {
+        self.terminal
     }
 }
 
+//     pub fn add(self, value: &[u8], match_type: &Match) -> NodeEnum {
+//         // let mut keys = [None; 4];
+//         // let mut children = Box::new(arr![NodeEnum::NNone; 4]);
+//         match value {
+//             [] => {
+//                 //should not occur because node starts from new_node0
+//                 unimplemented!()
+//             }
+//             [only] => {
+//                 // keys[0] = Some(*only);
+//                 // children[0] = NodeEnum::N0(Node0::new());
+//             }
+//             [first, rest @..] => {
+//                 // keys[0] = Some(*first);
+//                 // children[0] = NodeEnum::N4(Node4::new());
+//             }
+//         }
+//
+//         todo!()
+//         // NodeEnum::N4(Node4 {
+//         //     keys: keys,
+//         //     children: children,
+//         //     size: 1, //can be used to remove need for Option
+//         //     terminal: false //update this if its last value in string
+//         // })
+//     }
+// }
+
 impl Node16 {
+    //keys stored sorted
     pub fn new() -> Self {
         Node16 {
             keys: [None; 16],
@@ -164,6 +246,70 @@ impl Node16 {
             size: 0,
             terminal: false
         }
+    }
+
+    //TODO: should be node + value?
+    pub fn from(mut node :Node4) -> Self {
+        let mut new_node = Node16::new();
+
+        for i in 0..node.keys.len() {
+            new_node.keys[i] = node.keys[i].take();
+            new_node.children[i] = mem::replace(&mut node.children[i], NNone); //same function used by take
+        }
+
+        // let mut i = Some(Node4::new());
+        // let j = i.take();
+        // //
+        // let mut zipped: Vec<_> = node.keys
+        //     .iter()
+        //     .zip(node.children.iter())
+        //     .collect();
+        //
+        // zipped.sort_unstable_by(|a, b| {
+        //     if a.0.is_none() && b.0.is_none() { Ordering::Equal }
+        //     else if a.0.is_none() && b.0.is_some() { Ordering::Less }
+        //     else if a.0.is_some() && b.0.is_none() { Ordering::Greater }
+        //     else { a.0.unwrap().cmp(&b.0.unwrap()) }
+        // });
+        //
+        // let mut new_node = Node16::new();
+        // for (i,v) in zipped.iter().collect::<Vec<_>>().enumerate() {
+        //     new_node.keys[i] = *v.0;
+        //     new_node.children[i] = *v.1;
+        // }
+        todo!()
+        // Node16 {
+        //     keys: zipped.iter().map(|mut v| v.0.take()).collect::<Vec<_>>().try_into().expect("Vector does not fit array"),
+        //     children: zipped.iter().map(|v| v.1).collect(),
+        //     size: node.size,
+        //     terminal: node.terminal
+        // }
+    }
+}
+
+impl TrieNode for Node16 {
+    fn add_empty_case(self) -> NodeEnum {
+        todo!()
+    }
+
+    fn add_single_case(self, only_value: &u8, match_type: &Match) -> NodeEnum {
+        todo!()
+    }
+
+    fn add_multiple_case(self, first_value: &u8, remaining_values: &[u8], match_type: &Match) -> NodeEnum {
+        todo!()
+    }
+
+    fn is_full(&self) -> bool {
+        todo!()
+    }
+
+    fn is_empty(&self) -> bool {
+        todo!()
+    }
+
+    fn is_terminal(&self) -> bool {
+        todo!()
     }
 }
 
@@ -176,6 +322,36 @@ impl Node48 {
             terminal: false
         }
     }
+
+    pub fn from(node :Node16) -> Self {
+        todo!()
+    }
+}
+
+impl TrieNode for Node48 {
+    fn add_empty_case(self) -> NodeEnum {
+        todo!()
+    }
+
+    fn add_single_case(self, only_value: &u8, match_type: &Match) -> NodeEnum {
+        todo!()
+    }
+
+    fn add_multiple_case(self, first_value: &u8, remaining_values: &[u8], match_type: &Match) -> NodeEnum {
+        todo!()
+    }
+
+    fn is_full(&self) -> bool {
+        todo!()
+    }
+
+    fn is_empty(&self) -> bool {
+        todo!()
+    }
+
+    fn is_terminal(&self) -> bool {
+        todo!()
+    }
 }
 
 impl Node256 {
@@ -186,17 +362,80 @@ impl Node256 {
             terminal: false
         }
     }
+
+    pub fn from(node :Node48) -> Self {
+        todo!()
+    }
+}
+
+impl TrieNode for Node256 {
+    fn add_empty_case(self) -> NodeEnum {
+        todo!()
+    }
+
+    fn add_single_case(self, only_value: &u8, match_type: &Match) -> NodeEnum {
+        todo!()
+    }
+
+    fn add_multiple_case(self, first_value: &u8, remaining_values: &[u8], match_type: &Match) -> NodeEnum {
+        todo!()
+    }
+
+    fn is_full(&self) -> bool {
+        todo!()
+    }
+
+    fn is_empty(&self) -> bool {
+        todo!()
+    }
+
+    fn is_terminal(&self) -> bool {
+        todo!()
+    }
 }
 
 impl NodeEnum {
     pub fn add(self, value: &[u8], match_type: &Match) -> Self {
         match self {
-            NodeEnum::NNone => NodeEnum::N0(Node0{}),
+            NodeEnum::NNone => NodeEnum::N0(Node0::new(false)),
             NodeEnum::N0(n) => n.add(value, match_type),
-            NodeEnum::N4 { .. } => {todo!()}
-            NodeEnum::N16 { .. } => {todo!()}
-            NodeEnum::N48 { .. } => {todo!()}
-            NodeEnum::N256 { .. } => {todo!()}
+            NodeEnum::N4(n) => n.add(value, match_type),
+            NodeEnum::N16(n) => n.add(value, match_type),
+            NodeEnum::N48(n) => n.add(value, match_type),
+            NodeEnum::N256(n) => n.add(value, match_type)
+        }
+    }
+
+    fn add_empty_case(self) -> NodeEnum {
+        match self {
+            NodeEnum::NNone => NodeEnum::N0(Node0::new(false)),
+            NodeEnum::N0(n) => n.add_empty_case(),
+            NodeEnum::N4(n) => n.add_empty_case(),
+            NodeEnum::N16(n) => n.add_empty_case(),
+            NodeEnum::N48(n) => n.add_empty_case(),
+            NodeEnum::N256(n) => n.add_empty_case()
+        }
+    }
+
+    fn add_single_case(self, only_value :&u8, match_type :&Match) -> NodeEnum {
+        match self {
+            NodeEnum::NNone => NodeEnum::N0(Node0::new(false)),
+            NodeEnum::N0(n) => n.add_single_case(only_value, match_type),
+            NodeEnum::N4(n) => n.add_single_case(only_value, match_type),
+            NodeEnum::N16(n) => n.add_single_case(only_value, match_type),
+            NodeEnum::N48(n) => n.add_single_case(only_value, match_type),
+            NodeEnum::N256(n) => n.add_single_case(only_value, match_type)
+        }
+    }
+
+    fn add_multiple_case(self, first_value :&u8, remaining_values :&[u8], match_type :&Match) -> NodeEnum {
+        match self {
+            NodeEnum::NNone => NodeEnum::N0(Node0::new(false)),
+            NodeEnum::N0(n) => n.add_multiple_case(first_value, remaining_values, match_type),
+            NodeEnum::N4(n) => n.add_multiple_case(first_value, remaining_values, match_type),
+            NodeEnum::N16(n) => n.add_multiple_case(first_value, remaining_values, match_type),
+            NodeEnum::N48(n) => n.add_multiple_case(first_value, remaining_values, match_type),
+            NodeEnum::N256(n) => n.add_multiple_case(first_value, remaining_values, match_type)
         }
     }
 

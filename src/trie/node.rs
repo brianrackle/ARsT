@@ -252,38 +252,26 @@ impl Node16 {
     pub fn from(mut node :Node4) -> Self {
         let mut new_node = Node16::new();
 
-        for i in 0..node.keys.len() {
-            new_node.keys[i] = node.keys[i].take();
-            new_node.children[i] = mem::replace(&mut node.children[i], NNone); //same function used by take
+        //sort the keys and original indices
+        //the original indices will be used to create new arrays with the correct order
+        let ordered_index = {
+            let mut ordered_index_value = new_node.keys.iter().enumerate().collect::<Vec<_>>();
+            ordered_index_value.sort_unstable_by(|(_, a_value), (_, b_value)| {
+                if a_value.is_none() && b_value.is_none() { Ordering::Equal } else if a_value.is_none() && b_value.is_some() { Ordering::Less } else if a_value.is_some() && b_value.is_none() { Ordering::Greater } else { a_value.unwrap().cmp(&b_value.unwrap()) }
+            });
+            ordered_index_value.iter().map(|(index, _)| *index).collect::<Vec<_>>()
+        };
+
+        //order arrays based on the ordered indices
+        for (target_i, source_i) in ordered_index.iter().enumerate() {
+            new_node.keys[target_i] = node.keys[*source_i].take();
+            new_node.children[target_i] = mem::replace(&mut node.children[*source_i], NNone); //same function used by take
         }
 
-        // let mut i = Some(Node4::new());
-        // let j = i.take();
-        // //
-        // let mut zipped: Vec<_> = node.keys
-        //     .iter()
-        //     .zip(node.children.iter())
-        //     .collect();
-        //
-        // zipped.sort_unstable_by(|a, b| {
-        //     if a.0.is_none() && b.0.is_none() { Ordering::Equal }
-        //     else if a.0.is_none() && b.0.is_some() { Ordering::Less }
-        //     else if a.0.is_some() && b.0.is_none() { Ordering::Greater }
-        //     else { a.0.unwrap().cmp(&b.0.unwrap()) }
-        // });
-        //
-        // let mut new_node = Node16::new();
-        // for (i,v) in zipped.iter().collect::<Vec<_>>().enumerate() {
-        //     new_node.keys[i] = *v.0;
-        //     new_node.children[i] = *v.1;
-        // }
-        todo!()
-        // Node16 {
-        //     keys: zipped.iter().map(|mut v| v.0.take()).collect::<Vec<_>>().try_into().expect("Vector does not fit array"),
-        //     children: zipped.iter().map(|v| v.1).collect(),
-        //     size: node.size,
-        //     terminal: node.terminal
-        // }
+        new_node.size = node.size;
+        new_node.terminal = node.terminal;
+
+        new_node
     }
 }
 

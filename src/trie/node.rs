@@ -8,13 +8,13 @@ pub trait TrieNode: Sized {
     fn add(mut self, value: &[u8], match_type: &Match) -> NodeEnum {
         match value {
             [] => self.add_empty_case(),
-            [only_value] => self.add_single_case(only_value, match_type),
-            [first_value, remaining_values @..] => self.add_multiple_case(first_value, remaining_values, match_type)
+            [cur_value] => self.add_single_case(cur_value, match_type),
+            [cur_value, remaining_values @..] => self.add_multiple_case(cur_value, remaining_values, match_type)
         }
     }
     fn add_empty_case(self) -> NodeEnum;
-    fn add_single_case(self, only_value :&u8, match_type :&Match) -> NodeEnum;
-    fn add_multiple_case(self, first_value :&u8, remaining_values :&[u8], match_type :&Match) -> NodeEnum;
+    fn add_single_case(self, cur_value :&u8, match_type :&Match) -> NodeEnum;
+    fn add_multiple_case(self, cur_value :&u8, remaining_values :&[u8], match_type :&Match) -> NodeEnum;
     fn is_full(&self) -> bool;
     fn is_empty(&self) -> bool;
     fn is_terminal(&self) -> bool;
@@ -95,14 +95,14 @@ impl TrieNode for Node0 {
     }
 
     //TODO: review all new(terminal) usages to make sure they are correctly assigned
-    fn add_single_case(mut self, only_value :&u8, match_type :&Match) -> NodeEnum {
+    fn add_single_case(mut self, cur_value :&u8, match_type :&Match) -> NodeEnum {
         //need to upgrade to Node4 to add a value
-        Node4::from(self).add_single_case(only_value, match_type)
+        Node4::from(self).add_single_case(cur_value, match_type)
     }
 
-    fn add_multiple_case(mut self, first_value :&u8, remaining_values :&[u8], match_type :&Match) -> NodeEnum {
+    fn add_multiple_case(mut self, cur_value :&u8, remaining_values :&[u8], match_type :&Match) -> NodeEnum {
         //need to upgrade to Node4 to add a value
-        Node4::from(self).add_multiple_case(first_value, remaining_values, match_type)
+        Node4::from(self).add_multiple_case(cur_value, remaining_values, match_type)
     }
 
     fn is_full(&self) -> bool {
@@ -140,35 +140,37 @@ impl TrieNode for Node4 {
         NodeEnum::N4(self)
     }
 
-    fn add_single_case(mut self, only_value :&u8, match_type :&Match) -> NodeEnum {
+    fn add_single_case(mut self, cur_value :&u8, match_type :&Match) -> NodeEnum {
         //check if value exists already
-        if let Some(index) = self.keys.iter().position(|v| v.is_some() && v.unwrap() == *only_value) {
-            //TODO: look at implementing a swap function or changing add to mutable borrow
+        if let Some(index) = self.keys.iter().position(|v| v.is_some() && v.unwrap() == *cur_value) {
+            //TODO: consider implementing a swap function or changing add to mutable borrow
             self.children[index] = self.children[index].take().add_empty_case();
             NodeEnum::N4(self)
         } else { //value doesnt exist yet
             //expand to node16 and then add new value
             if self.is_full() {
-                Node16::from(self).add_single_case(only_value, match_type)
+                Node16::from(self).add_single_case(cur_value, match_type)
             } else { //add value to existing Node4 if there is room
-                self.keys[self.size] = Some(*only_value);
+                self.keys[self.size] = Some(*cur_value);
                 self.children[self.size] = Node0::new(false).add_empty_case();
                 NodeEnum::N4(self)
             }
         }
     }
 
-    fn add_multiple_case(mut self, first_value :&u8, remaining_values :&[u8], match_type :&Match) -> NodeEnum {
+    fn add_multiple_case(mut self, cur_value :&u8, remaining_values :&[u8], match_type :&Match) -> NodeEnum {
         //check if value exists already
-        if let Some(index) = self.keys.iter().position(|v| v.is_some() && v.unwrap() == *first_value) {
+        if let Some(index) = self.keys.iter().position(|v| v.is_some() && v.unwrap() == *cur_value) {
             self.children[index] = self.children[index].take().add(remaining_values, match_type);
             NodeEnum::N4(self)
         } else { //value doesnt exist yet
             //expand to node16 and then add new value
             if self.is_full() {
-                Node16::from(self).add_multiple_case(first_value, remaining_values, match_type)
+                //TODO: consider at alternate implementation which joins first and remaining into a vector but allows for using add instead of specific
+                // Node16::from(self).add(&[&[*cur_value], remaining_values].concat(), match_type);
+                Node16::from(self).add_multiple_case(cur_value, remaining_values, match_type)
             } else { //add value to existing Node4 if there is room
-                self.keys[self.size] = Some(*first_value);
+                self.keys[self.size] = Some(*cur_value);
                 self.children[self.size] = Node4::new(false).add(remaining_values, match_type);
                 NodeEnum::N4(self)
             }
@@ -223,10 +225,10 @@ impl TrieNode for Node16 {
         NodeEnum::N16(self)
     }
 
-    fn add_single_case(mut self, only_value: &u8, match_type: &Match) -> NodeEnum {
+    fn add_single_case(mut self, cur_value: &u8, match_type: &Match) -> NodeEnum {
         //check if value exists already
         //binary search
-        match self.keys.binary_search_by(|probe| option_u8_cmp(probe, &Some(*only_value))) {
+        match self.keys.binary_search_by(|probe| option_u8_cmp(probe, &Some(*cur_value))) {
             Ok(index) => {
                 self.children[index] = self.children[index].take().add(&[], match_type);
                 NodeEnum::N16(self)
@@ -234,10 +236,10 @@ impl TrieNode for Node16 {
             Err(index) => {
                 //expand to node48 and then add new value
                 if self.is_full() {
-                    Node48::from(self).add_single_case(only_value, match_type)
+                    Node48::from(self).add_single_case(cur_value, match_type)
                 } else { //add value in sorted order to existing Node16 if there is room
                     self.keys[index..].rotate_right(1); //shift right from index
-                    self.keys[index] = Some(*only_value);
+                    self.keys[index] = Some(*cur_value);
 
                     self.children[index..].rotate_right(1);
                     self.children[index] = Node0::new(false).add_empty_case(); //done this way for consistency of implementations
@@ -247,20 +249,41 @@ impl TrieNode for Node16 {
         }
     }
 
-    fn add_multiple_case(mut self, first_value: &u8, remaining_values: &[u8], match_type: &Match) -> NodeEnum {
-        todo!()
+    //TODO: rename cur_value and cur_value to operating_value or something like that
+    fn add_multiple_case(mut self, cur_value: &u8, remaining_values: &[u8], match_type: &Match) -> NodeEnum {
+        //check if value exists already
+        //binary search
+        match self.keys.binary_search_by(|probe| option_u8_cmp(probe, &Some(*cur_value))) {
+            Ok(index) => {
+                self.children[index] = self.children[index].take().add(&[], match_type);
+                NodeEnum::N16(self)
+            }
+            Err(index) => {
+                //expand to node48 and then add new value
+                if self.is_full() {
+                    Node48::from(self).add_single_case(cur_value, match_type)
+                } else { //add value in sorted order to existing Node16 if there is room
+                    self.keys[index..].rotate_right(1); //shift right from index
+                    self.keys[index] = Some(*cur_value);
+
+                    self.children[index..].rotate_right(1);
+                    self.children[index] = Node0::new(false).add_empty_case(); //done this way for consistency of implementations
+                    NodeEnum::N16(self)
+                }
+            }
+        }
     }
 
     fn is_full(&self) -> bool {
-        todo!()
+       self.size == self.children.len()
     }
 
     fn is_empty(&self) -> bool {
-        todo!()
+        self.size == 0
     }
 
     fn is_terminal(&self) -> bool {
-        todo!()
+        self.terminal
     }
 }
 
@@ -285,24 +308,24 @@ impl TrieNode for Node48 {
         NodeEnum::N48(self)
     }
 
-    fn add_single_case(mut self, only_value: &u8, match_type: &Match) -> NodeEnum {
+    fn add_single_case(mut self, cur_value: &u8, match_type: &Match) -> NodeEnum {
         todo!()
     }
 
-    fn add_multiple_case(mut self, first_value: &u8, remaining_values: &[u8], match_type: &Match) -> NodeEnum {
+    fn add_multiple_case(mut self, cur_value: &u8, remaining_values: &[u8], match_type: &Match) -> NodeEnum {
         todo!()
     }
 
     fn is_full(&self) -> bool {
-        todo!()
+        self.size == self.children.len()
     }
 
     fn is_empty(&self) -> bool {
-        todo!()
+        self.size == 0
     }
 
     fn is_terminal(&self) -> bool {
-        todo!()
+        self.terminal
     }
 }
 
@@ -326,24 +349,24 @@ impl TrieNode for Node256 {
         NodeEnum::N256(self)
     }
 
-    fn add_single_case(mut self, only_value: &u8, match_type: &Match) -> NodeEnum {
+    fn add_single_case(mut self, cur_value: &u8, match_type: &Match) -> NodeEnum {
         todo!()
     }
 
-    fn add_multiple_case(mut self, first_value: &u8, remaining_values: &[u8], match_type: &Match) -> NodeEnum {
+    fn add_multiple_case(mut self, cur_value: &u8, remaining_values: &[u8], match_type: &Match) -> NodeEnum {
         todo!()
     }
 
     fn is_full(&self) -> bool {
-        todo!()
+        self.size == self.children.len()
     }
 
     fn is_empty(&self) -> bool {
-        todo!()
+        self.size == 0
     }
 
     fn is_terminal(&self) -> bool {
-        todo!()
+        self.terminal
     }
 }
 
@@ -370,25 +393,25 @@ impl NodeEnum {
         }
     }
 
-    fn add_single_case(self, only_value :&u8, match_type :&Match) -> NodeEnum {
+    fn add_single_case(self, cur_value :&u8, match_type :&Match) -> NodeEnum {
         match self {
             NodeEnum::NNone => NodeEnum::N0(Node0::new(false)),
-            NodeEnum::N0(n) => n.add_single_case(only_value, match_type),
-            NodeEnum::N4(n) => n.add_single_case(only_value, match_type),
-            NodeEnum::N16(n) => n.add_single_case(only_value, match_type),
-            NodeEnum::N48(n) => n.add_single_case(only_value, match_type),
-            NodeEnum::N256(n) => n.add_single_case(only_value, match_type)
+            NodeEnum::N0(n) => n.add_single_case(cur_value, match_type),
+            NodeEnum::N4(n) => n.add_single_case(cur_value, match_type),
+            NodeEnum::N16(n) => n.add_single_case(cur_value, match_type),
+            NodeEnum::N48(n) => n.add_single_case(cur_value, match_type),
+            NodeEnum::N256(n) => n.add_single_case(cur_value, match_type)
         }
     }
 
-    fn add_multiple_case(self, first_value :&u8, remaining_values :&[u8], match_type :&Match) -> NodeEnum {
+    fn add_multiple_case(self, cur_value :&u8, remaining_values :&[u8], match_type :&Match) -> NodeEnum {
         match self {
             NodeEnum::NNone => NodeEnum::N0(Node0::new(false)),
-            NodeEnum::N0(n) => n.add_multiple_case(first_value, remaining_values, match_type),
-            NodeEnum::N4(n) => n.add_multiple_case(first_value, remaining_values, match_type),
-            NodeEnum::N16(n) => n.add_multiple_case(first_value, remaining_values, match_type),
-            NodeEnum::N48(n) => n.add_multiple_case(first_value, remaining_values, match_type),
-            NodeEnum::N256(n) => n.add_multiple_case(first_value, remaining_values, match_type)
+            NodeEnum::N0(n) => n.add_multiple_case(cur_value, remaining_values, match_type),
+            NodeEnum::N4(n) => n.add_multiple_case(cur_value, remaining_values, match_type),
+            NodeEnum::N16(n) => n.add_multiple_case(cur_value, remaining_values, match_type),
+            NodeEnum::N48(n) => n.add_multiple_case(cur_value, remaining_values, match_type),
+            NodeEnum::N256(n) => n.add_multiple_case(cur_value, remaining_values, match_type)
         }
     }
 

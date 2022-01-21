@@ -1,28 +1,8 @@
 use std::cmp::Ordering;
-use std::convert::TryInto;
 use std::mem;
-use std::ops::Index;
-use crate::trie::enums::{Case, Match};
+use crate::trie::enums::{Match};
 use arr_macro::arr;
 use crate::trie::node::NodeEnum::NNone;
-
-// //nodes need to be able to upgrade to a new type
-//trienode trait provides
-// trait TrieNode {
-//     //fn from() -> Self; //creates new trienode based on a lesser sized trienode
-//     fn add(&mut self, value: &u8, match_type: &Match);
-//     fn exists(&self, c: char) -> Box<&dyn TrieNode>;
-//     fn get_size(&self) -> usize;
-//     fn get_capacity(&self) -> usize;
-//     fn is_terminal(&self) -> bool;
-//
-//     fn is_full(&self) -> bool {
-//         self.get_size() == self.get_capacity()
-//     }
-//     fn is_empty(&self) -> bool {
-//         self.get_size() == 0
-//     }
-// }
 
 pub trait TrieNode: Sized {
     fn add(mut self, value: &[u8], match_type: &Match) -> NodeEnum {
@@ -38,6 +18,10 @@ pub trait TrieNode: Sized {
     fn is_full(&self) -> bool;
     fn is_empty(&self) -> bool;
     fn is_terminal(&self) -> bool;
+}
+
+fn option_u8_cmp(a :&Option<u8>, b :&Option<u8>) -> Ordering {
+    if a.is_none() && b.is_none() { Ordering::Equal } else if a.is_none() && b.is_some() { Ordering::Greater } else if a.is_some() && b.is_none() { Ordering::Less } else { a.unwrap().cmp(&b.unwrap()) }
 }
 
 pub struct Node0 {
@@ -110,31 +94,15 @@ impl TrieNode for Node0 {
         NodeEnum::N0(self)
     }
 
+    //TODO: review all new(terminal) usages to make sure they are correctly assigned
     fn add_single_case(mut self, only_value :&u8, match_type :&Match) -> NodeEnum {
-
-        let mut keys = [None; 4];
-        let mut children = Box::new(arr![NodeEnum::NNone; 4]);
-        keys[0] = Some(*only_value);
-        children[0] = Node0::new(true).add(&[], match_type); //current node is last value so next node is terminal
-        NodeEnum::N4(Node4 {
-            keys,
-            children,
-            size: 1,
-            terminal: self.terminal //update this if its last value in string
-        })
+        //need to upgrade to Node4 to add a value
+        Node4::from(self).add_single_case(only_value, match_type)
     }
 
     fn add_multiple_case(mut self, first_value :&u8, remaining_values :&[u8], match_type :&Match) -> NodeEnum {
-        let mut keys = [None; 4];
-        let mut children = Box::new(arr![NodeEnum::NNone; 4]);
-        keys[0] = Some(*first_value);
-        children[0] = Node4::new().add(remaining_values, match_type);
-        NodeEnum::N4(Node4 {
-            keys,
-            children,
-            size: 1, //can be used to remove need for Option
-            terminal: self.terminal //update this if its last value in string
-        })
+        //need to upgrade to Node4 to add a value
+        Node4::from(self).add_multiple_case(first_value, remaining_values, match_type)
     }
 
     fn is_full(&self) -> bool {
@@ -166,6 +134,7 @@ impl Node4 {
 }
 
 impl TrieNode for Node4 {
+    //TODO: will need to be enhanced in the future to support the match types
     fn add_empty_case(mut self) -> NodeEnum {
         self.terminal = true;
         NodeEnum::N4(self)
@@ -190,17 +159,20 @@ impl TrieNode for Node4 {
     }
 
     fn add_multiple_case(mut self, first_value :&u8, remaining_values :&[u8], match_type :&Match) -> NodeEnum {
-        // let mut keys = [None; 4];
-        // let mut children = Box::new(arr![NodeEnum::NNone; 4]);
-        // keys[0] = Some(*first_value);
-        // children[0] = Node4::new().add(remaining_values, match_type);
-        // NodeEnum::N4(Node4 {
-        //     keys: keys,
-        //     children: children,
-        //     size: 1, //can be used to remove need for Option
-        //     terminal: false //update this if its last value in string
-        // })
-        todo!()
+        //check if value exists already
+        if let Some(index) = self.keys.iter().position(|v| v.is_some() && v.unwrap() == *first_value) {
+            self.children[index] = self.children[index].take().add(remaining_values, match_type);
+            NodeEnum::N4(self)
+        } else { //value doesnt exist yet
+            //expand to node16 and then add new value
+            if self.is_full() {
+                Node16::from(self).add_multiple_case(first_value, remaining_values, match_type)
+            } else { //add value to existing Node4 if there is room
+                self.keys[self.size] = Some(*first_value);
+                self.children[self.size] = Node4::new(false).add(remaining_values, match_type);
+                NodeEnum::N4(self)
+            }
+        }
     }
 
     fn is_full(&self) -> bool {
@@ -229,40 +201,53 @@ impl Node16 {
 
     pub fn from(mut node :Node4) -> Self {
         let mut new_node = Node16::new(node.terminal);
-
         //sort the keys and original indices of the keys
         //the original indices will be used to create new arrays with the correct order
-        let ordered_index = {
-            let mut ordered_index_value = new_node.keys.iter().enumerate().collect::<Vec<_>>();
-            ordered_index_value.sort_unstable_by(|(_, a_value), (_, b_value)| {
-                if a_value.is_none() && b_value.is_none() { Ordering::Equal } else if a_value.is_none() && b_value.is_some() { Ordering::Less } else if a_value.is_some() && b_value.is_none() { Ordering::Greater } else { a_value.unwrap().cmp(&b_value.unwrap()) }
-            });
-            ordered_index_value.iter().map(|(index, _)| *index).collect::<Vec<_>>()
-        };
-
+        let mut ordered_index_value = new_node.keys.iter().enumerate().collect::<Vec<_>>();
+        ordered_index_value.sort_unstable_by(|(_, a), (_, b)| option_u8_cmp(a,b));
+        let ordered_index = ordered_index_value.iter().map(|(index, _)| *index).collect::<Vec<_>>();
         //order arrays based on the ordered indices
         for (target_i, source_i) in ordered_index.iter().enumerate() {
-            new_node.keys[target_i] = node.keys[*source_i].take();
+            new_node.keys[target_i] = node.keys[(*source_i)].take();
             new_node.children[target_i] = node.children[*source_i].take(); //same function used by Option::take to replace element
         }
-
         new_node.size = node.size;
         new_node.terminal = node.terminal;
-
         new_node
     }
 }
 
 impl TrieNode for Node16 {
-    fn add_empty_case(self) -> NodeEnum {
-        todo!()
+    fn add_empty_case(mut self) -> NodeEnum {
+        self.terminal = true;
+        NodeEnum::N16(self)
     }
 
-    fn add_single_case(self, only_value: &u8, match_type: &Match) -> NodeEnum {
-        todo!()
+    fn add_single_case(mut self, only_value: &u8, match_type: &Match) -> NodeEnum {
+        //check if value exists already
+        //binary search
+        match self.keys.binary_search_by(|probe| option_u8_cmp(probe, &Some(*only_value))) {
+            Ok(index) => {
+                self.children[index] = self.children[index].take().add(&[], match_type);
+                NodeEnum::N16(self)
+            }
+            Err(index) => {
+                //expand to node48 and then add new value
+                if self.is_full() {
+                    Node48::from(self).add_single_case(only_value, match_type)
+                } else { //add value in sorted order to existing Node16 if there is room
+                    self.keys[index..].rotate_right(1); //shift right from index
+                    self.keys[index] = Some(*only_value);
+
+                    self.children[index..].rotate_right(1);
+                    self.children[index] = Node0::new(false).add_empty_case(); //done this way for consistency of implementations
+                    NodeEnum::N16(self)
+                }
+            }
+        }
     }
 
-    fn add_multiple_case(self, first_value: &u8, remaining_values: &[u8], match_type: &Match) -> NodeEnum {
+    fn add_multiple_case(mut self, first_value: &u8, remaining_values: &[u8], match_type: &Match) -> NodeEnum {
         todo!()
     }
 
@@ -295,15 +280,16 @@ impl Node48 {
 }
 
 impl TrieNode for Node48 {
-    fn add_empty_case(self) -> NodeEnum {
+    fn add_empty_case(mut self) -> NodeEnum {
+        self.terminal = true;
+        NodeEnum::N48(self)
+    }
+
+    fn add_single_case(mut self, only_value: &u8, match_type: &Match) -> NodeEnum {
         todo!()
     }
 
-    fn add_single_case(self, only_value: &u8, match_type: &Match) -> NodeEnum {
-        todo!()
-    }
-
-    fn add_multiple_case(self, first_value: &u8, remaining_values: &[u8], match_type: &Match) -> NodeEnum {
+    fn add_multiple_case(mut self, first_value: &u8, remaining_values: &[u8], match_type: &Match) -> NodeEnum {
         todo!()
     }
 
@@ -335,15 +321,16 @@ impl Node256 {
 }
 
 impl TrieNode for Node256 {
-    fn add_empty_case(self) -> NodeEnum {
+    fn add_empty_case(mut self) -> NodeEnum {
+        self.terminal = true;
+        NodeEnum::N256(self)
+    }
+
+    fn add_single_case(mut self, only_value: &u8, match_type: &Match) -> NodeEnum {
         todo!()
     }
 
-    fn add_single_case(self, only_value: &u8, match_type: &Match) -> NodeEnum {
-        todo!()
-    }
-
-    fn add_multiple_case(self, first_value: &u8, remaining_values: &[u8], match_type: &Match) -> NodeEnum {
+    fn add_multiple_case(mut self, first_value: &u8, remaining_values: &[u8], match_type: &Match) -> NodeEnum {
         todo!()
     }
 
@@ -407,163 +394,7 @@ impl NodeEnum {
 
 }
 
-
-//
-// impl NodeEnum {
-//     //should consume self so that it can be upgraded if needed
-//     fn add(self, value: &str, match_type: &Match) -> Self {
-//         //needs to upgrade if capacity is reached
-//         //insert into next open space in array until filled to capacity
-//         match self {
-//             NodeEnum::Node0 => {
-//                 NodeEnum::Node4 {
-//                     keys: [None; 4],
-//                     children: [None; 4],
-//                     size: 0,
-//                     capacity: 4,
-//                     terminal: false,
-//                 }
-//                 // let return_node = NodeEnum::Node4::new();
-//                 // return_node
-//             }
-//             NodeEnum::Node4 { keys, children, count, capacity, terminal } => {
-//                 if !self.is_full() { //add to existing
-//                     // match value {
-//                     //     [first, rest @ ..] =>
-//                     // }
-//                     // if keys[count]..is_some() {
-//                     //
-//                     // }
-//
-//                 } else { //else upgrade to node16
-//
-//                 }
-//                 todo!()
-//             }
-//             NodeEnum::Node16 { .. } => {
-//                 todo!()
-//             }
-//             NodeEnum::Node48 { .. } => {
-//                 todo!()
-//             }
-//             NodeEnum::Node256 { .. } => {
-//                 todo!()
-//             }
-//         }
-//     }
-//
-//     fn exists(&self, c: char) -> Option<&NodeEnum> {
-//         //linearly search array no early exit to allow optimization
-//         todo!()
-//     }
-//
-//     fn is_terminal(&self) -> bool {
-//         todo!()
-//     }
-//
-//     fn is_full(&self) -> bool {
-//         match self {
-//             Node0 => true,
-//             other => self.size() != self.capacity()
-//         }
-//     }
-//
-//     fn is_empty(&self) -> bool {
-//         match self {
-//             Node0 => false,
-//             NodeEnum::Node4{count, ..} => count == 0u8, //this is dumb, should implement as traits
-//             NodeEnum::Node16 {count, ..} => count == 0,
-//             NodeEnum::Node48 {count, ..} => count == 0,
-//             NodeEnum::Node256 {count, ..} => count == 0
-//         }
-//     }
-//
-//     fn size(&self) -> usize {
-//         match self {
-//             Node0 => 0,
-//             _ => self.count
-//         }
-//     }
-//
-//     fn capacity(&self) -> usize {
-//         match self {
-//             Node0 => 0,
-//             NodeEnum::Node4{capacity, ..} => capacity, //this is dumb, should implement as traits
-//             NodeEnum::Node16 {capacity, ..} => capacity,
-//             NodeEnum::Node48 {capacity, ..} => capacity,
-//             NodeEnum::Node256 {capacity, ..} => capacity
-//         }
-//     }
-// }
-
-// pub struct Node16 {
-//     keys: [Option<u8>; 16], //value represents value with matching node in children index
-//     children: [Option<NodeEnum>; 16],
-//     terminal: bool,
-// }
-
-// impl TrieNode for Node16 {
-//     fn new() -> Self {
-//         todo!()
-//     }
-//
-//     fn add(&mut self, value: &str, match_type: &Match) {
-//         //needs to upgrade if capacity is reached
-//         //insert into array in sorted order until filled to capacity
-//         todo!()
-//     }
-//
-//     fn exists(&self, c: char) -> Option<&NodeEnum> {
-//         //binary search array
-//         todo!()
-//     }
-// }
-
-// pub struct Node48 {
-//     keys: [u8; 256], //index represents value, and value represents index in children
-//     children: [NodeEnum; 48],
-//     terminal: bool,
-// }
-
-// impl TrieNode for Node48 {
-//     fn new() -> Self {
-//         todo!()
-//     }
-//
-//     fn add(&mut self, value: &str, match_type: &Match) {
-//         //needs to upgrade if capacity is reached
-//         //insert into array in sorted order until filled to capacity
-//         todo!()
-//     }
-//
-//     fn exists(&self, c: char) -> Option<&NodeEnum> {
-//         //binary search array
-//         todo!()
-//     }
-// }
-
-// pub struct Node256 {
-//     children: [NodeEnum; 256],
-//     terminal: bool,
-// }
-
-// impl TrieNode for Node256 {
-//     fn new() -> Self {
-//         todo!()
-//     }
-//
-//     fn add(&mut self, value: &str, match_type: &Match) {
-//         //needs to upgrade if capacity is reached
-//         //insert into array in sorted order until filled to capacity
-//         todo!()
-//     }
-//
-//     fn exists(&self, c: char) -> Option<&NodeEnum> {
-//         //binary search array
-//         todo!()
-//     }
-// }
-
+//Old implementation starts here
 pub type Link = Option<Box<Node>>;
 pub struct Node {
     children: [Link; 257],

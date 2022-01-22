@@ -22,7 +22,6 @@ impl Trie {
         if value.len() != 0 {
             self.index.add(value.as_bytes(), &self.matching)
         }
-
     }
 
     pub fn exists(&self, value: &str) -> bool {
@@ -62,7 +61,7 @@ mod test {
         for i in 0_u8..255_u8 {
             let contain = s.contains(&String::from(i as char));
             if contain != n.get_node(i as usize).is_some() {
-                return false
+                return false;
             }
         }
         true

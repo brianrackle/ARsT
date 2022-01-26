@@ -135,6 +135,7 @@ impl Node4 {
 
     pub fn from(mut node: Node0) -> Self {
         Node4::new(node.terminal)
+        //FIXME: need to add size
     }
 }
 
@@ -190,8 +191,8 @@ impl TrieNode for Node4 {
         } else if self.is_full() { //value doesnt exist yet
             //expand to node16 and then add new value
 
-            //TODO: consider at alternate implementation which joins first and remaining into a vector but allows for using add instead of specific
-            // Node16::from(self).add(&[&[*cur_value], remaining_values].concat(), match_type);
+            //TODO: consider this alternate implementation which joins first and remaining into a vector but allows for using add instead of specific
+            //Node16::from(self).add(&[&[*cur_value], remaining_values].concat(), match_type);
             Node16::from(self).add_multiple_case(cur_value, remaining_values, match_type)
         } else {
             //add value to existing Node4 if there is room
@@ -243,7 +244,8 @@ impl Node16 {
             new_node.children[target_i] = node.children[*source_i].take(); //same function used by Option::take to replace element
         }
         new_node.size = node.size;
-        new_node.terminal = node.terminal;
+        //TODO: consider removing the terminal param for consistency to prevent these issues, or adding the size param, or using builder pattern
+        // new_node.terminal = node.terminal; already added above
         new_node
     }
 
@@ -306,7 +308,9 @@ impl TrieNode for Node16 {
             .keys
             .binary_search_by(|probe| Node16::val_cmp(probe, &Some(*cur_value)))
         {
-            //TODO: can this be simplified to add_single_case.add(remaining_values, match_type)
+            //TODO: can this be simplified to add_single_case.add(remaining_values, match_type),
+            // add single case would instead need to return the child that is created or used, so figuring out ownership would be hard
+            //instead
             Ok(index) => {
                 self.children[index] = self.children[index]
                     .take()
@@ -355,7 +359,6 @@ impl Node48 {
         }
     }
 
-    //TODO: need to pass size for all new nodes
     pub fn from(mut node: Node16) -> Self {
         //add keys which point to appropriate child index
         let mut new_node = Node48::new(node.terminal);
@@ -365,8 +368,7 @@ impl Node48 {
             new_node.keys[node.keys[index].unwrap() as usize] = Some(i);
             new_node.children[index] = node.children[index].take();
         }
-        //TODO: update new to take a size?
-        new_node.size = 16;
+        new_node.size = node.size;
         new_node
     }
 }
@@ -389,10 +391,8 @@ impl TrieNode for Node48 {
             Node256::from(self).add_single_case(cur_value, match_type)
         } else {
             //add to self
-            //TODO: can add_multiple_case leverage add single case? or just have a single
             self.keys[cur_value_index] = Some(self.size as u8);
             self.children[self.size] = Node0::new(false).add_empty_case();
-            //TODO: check to make sure size is set any time adding
             self.size += 1;
             NodeEnum::N48(self)
         }
@@ -404,7 +404,21 @@ impl TrieNode for Node48 {
         remaining_values: &[u8],
         match_type: &Match,
     ) -> NodeEnum {
-        todo!()
+        let cur_value_index = *cur_value as usize;
+        //if exists
+        if let Some(key) = self.keys[cur_value_index] {
+            let key_index = key as usize;
+            self.children[key_index] = self.children[key_index].take().add(remaining_values, match_type);
+            NodeEnum::N48(self)
+        } else if self.is_full() {
+            Node256::from(self).add_multiple_case(cur_value, remaining_values, match_type)
+        } else {
+            //add to self
+            self.keys[cur_value_index] = Some(self.size as u8);
+            self.children[self.size] = Node0::new(false).add(remaining_values, match_type);
+            self.size += 1;
+            NodeEnum::N48(self)
+        }
     }
 
     fn is_full(&self) -> bool {
@@ -430,7 +444,17 @@ impl Node256 {
     }
 
     pub fn from(mut node: Node48) -> Self {
-        todo!()
+        let mut new_node = Node256::new(node.terminal);
+
+        for (index, key) in node.keys.iter().enumerate() {
+            if let Some(key) = *key {
+                let key_index = key as usize;
+                new_node.children[index] = node.children[key_index].take();
+            }
+        }
+
+        new_node.size = node.size;
+        new_node
     }
 }
 
@@ -441,7 +465,20 @@ impl TrieNode for Node256 {
     }
 
     fn add_single_case(mut self, cur_value: &u8, match_type: &Match) -> NodeEnum {
-        todo!()
+        let cur_value_index = *cur_value as usize;
+        //if exists
+        match self.children[cur_value_index].take() {
+            NodeEnum::NNone => {
+                //TODO: does this mean I should implement a NodeNull type?
+                self.children[cur_value_index] = Node0::new(false).add_empty_case();
+                NodeEnum::N256(self)
+            }
+            node => {
+                self.children[cur_value_index] = node.add(&[*cur_value], match_type);
+                self.size += 1;
+                NodeEnum::N256(self)
+            }
+        }
     }
 
     fn add_multiple_case(
@@ -450,7 +487,20 @@ impl TrieNode for Node256 {
         remaining_values: &[u8],
         match_type: &Match,
     ) -> NodeEnum {
-        todo!()
+        let cur_value_index = *cur_value as usize;
+        //if exists
+        match self.children[cur_value_index].take() {
+            NodeEnum::NNone => {
+                //TODO: does this mean I should implement a NodeNull type?
+                self.children[cur_value_index] = Node0::new(false).add(remaining_values, match_type);
+                NodeEnum::N256(self)
+            }
+            node => {
+                self.children[cur_value_index] = node.add(remaining_values, match_type);
+                self.size += 1;
+                NodeEnum::N256(self)
+            }
+        }
     }
 
     fn is_full(&self) -> bool {

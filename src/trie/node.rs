@@ -1,5 +1,5 @@
 use crate::trie::enums::Match;
-use crate::trie::node::NodeEnum::NNone;
+use crate::trie::node::NodeEnum::{N256, NNone};
 use arr_macro::arr;
 use std::cmp::Ordering;
 use std::mem;
@@ -164,6 +164,8 @@ impl TrieNode for Node4 {
                 //add value to existing Node4 if there is room
                 self.keys[self.size] = Some(*cur_value);
                 self.children[self.size] = Node0::new(false).add_empty_case(); //done this way for consistency of implementations
+
+                self.size += 1;
                 NodeEnum::N4(self)
             }
         }
@@ -185,19 +187,19 @@ impl TrieNode for Node4 {
                 .take()
                 .add(remaining_values, match_type);
             NodeEnum::N4(self)
-        } else {
-            //value doesnt exist yet
+        } else if self.is_full() { //value doesnt exist yet
             //expand to node16 and then add new value
-            if self.is_full() {
-                //TODO: consider at alternate implementation which joins first and remaining into a vector but allows for using add instead of specific
-                // Node16::from(self).add(&[&[*cur_value], remaining_values].concat(), match_type);
-                Node16::from(self).add_multiple_case(cur_value, remaining_values, match_type)
-            } else {
-                //add value to existing Node4 if there is room
-                self.keys[self.size] = Some(*cur_value);
-                self.children[self.size] = Node4::new(false).add(remaining_values, match_type);
-                NodeEnum::N4(self)
-            }
+
+            //TODO: consider at alternate implementation which joins first and remaining into a vector but allows for using add instead of specific
+            // Node16::from(self).add(&[&[*cur_value], remaining_values].concat(), match_type);
+            Node16::from(self).add_multiple_case(cur_value, remaining_values, match_type)
+        } else {
+            //add value to existing Node4 if there is room
+            self.keys[self.size] = Some(*cur_value);
+            self.children[self.size] = Node4::new(false).add(remaining_values, match_type);
+
+            self.size += 1;
+            NodeEnum::N4(self)
         }
     }
 
@@ -285,6 +287,8 @@ impl TrieNode for Node16 {
 
                     self.children[index..].rotate_right(1);
                     self.children[index] = Node0::new(false).add_empty_case(); //done this way for consistency of implementations
+
+                    self.size += 1;
                     NodeEnum::N16(self)
                 }
             }
@@ -302,6 +306,7 @@ impl TrieNode for Node16 {
             .keys
             .binary_search_by(|probe| Node16::val_cmp(probe, &Some(*cur_value)))
         {
+            //TODO: can this be simplified to add_single_case.add(remaining_values, match_type)
             Ok(index) => {
                 self.children[index] = self.children[index]
                     .take()
@@ -319,6 +324,8 @@ impl TrieNode for Node16 {
 
                     self.children[index..].rotate_right(1);
                     self.children[index] = Node0::new(false).add(remaining_values, match_type);
+
+                    self.size += 1;
                     NodeEnum::N16(self)
                 }
             }
@@ -348,16 +355,18 @@ impl Node48 {
         }
     }
 
+    //TODO: need to pass size for all new nodes
     pub fn from(mut node: Node16) -> Self {
         //add keys which point to appropriate child index
         let mut new_node = Node48::new(node.terminal);
-
         //index in within keys represents the u8 and its value represents the index in children
         for i in 0..node.size as u8 {
             let index = i as usize;
             new_node.keys[node.keys[index].unwrap() as usize] = Some(i);
             new_node.children[index] = node.children[index].take();
         }
+        //TODO: update new to take a size?
+        new_node.size = 16;
         new_node
     }
 }
@@ -368,8 +377,25 @@ impl TrieNode for Node48 {
         NodeEnum::N48(self)
     }
 
+    //TODO: can specific adds (e.g. add_empty_case) be mutable borrows and general add be a move?
     fn add_single_case(mut self, cur_value: &u8, match_type: &Match) -> NodeEnum {
-        todo!()
+        let cur_value_index = *cur_value as usize;
+        //if exists
+        if let Some(key) = self.keys[cur_value_index] {
+            let key_index = key as usize;
+            self.children[key_index] = self.children[key_index].take().add_empty_case();
+            NodeEnum::N48(self)
+        } else if self.is_full() {
+            Node256::from(self).add_single_case(cur_value, match_type)
+        } else {
+            //add to self
+            //TODO: can add_multiple_case leverage add single case? or just have a single
+            self.keys[cur_value_index] = Some(self.size as u8);
+            self.children[self.size] = Node0::new(false).add_empty_case();
+            //TODO: check to make sure size is set any time adding
+            self.size += 1;
+            NodeEnum::N48(self)
+        }
     }
 
     fn add_multiple_case(

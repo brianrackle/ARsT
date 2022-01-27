@@ -34,8 +34,7 @@ pub struct Node0 {
 
 #[derive(Debug)]
 pub struct Node4 {
-    keys: [Option<u8>; 4],
-    //Can remove this option and rely only on children option
+    keys: [Option<u8>; 4], //Can remove this option and rely only on children option
     children: Box<[NodeEnum; 4]>,
     size: usize,
     terminal: bool,
@@ -187,14 +186,9 @@ impl TrieNode for Node4 {
         match_type: &Match,
     ) -> NodeEnum {
         //check if value exists already
-        if let Some(index) = self
-            .keys
-            .iter()
-            .position(|v| v.is_some() && v.unwrap() == *cur_value)
+        if let Some(index) = self.keys.iter().position(|v| v.is_some() && v.unwrap() == *cur_value)
         {
-            self.children[index] = self.children[index]
-                .take()
-                .add(remaining_values, match_type);
+            self.children[index] = self.children[index].take().add(remaining_values, match_type);
             NodeEnum::N4(self)
         } else if self.is_full() { //value doesnt exist yet
             //expand to node16 and then add new value
@@ -246,8 +240,9 @@ impl Node16 {
         let mut new_node = Node16::new();
         //sort the keys and original indices of the keys
         //the original indices will be used to create new arrays with the correct order
-        let mut ordered_index_value = new_node.keys.iter().enumerate().collect::<Vec<_>>();
+        let mut ordered_index_value = node.keys.iter().enumerate().collect::<Vec<_>>();
         ordered_index_value.sort_unstable_by(|(_, a), (_, b)| Node16::val_cmp(a, b));
+        //FIXME should be possible to do this without collecting into a vector
         let ordered_index = ordered_index_value
             .iter()
             .map(|(index, _)| *index)
@@ -645,17 +640,15 @@ mod tests {
     fn trial_run_test() {
         let mut node = NodeEnum::N0(Node0::new());
         node = node.add("ab".as_bytes(), &Match::Exact);
-        node = node.add("an".as_bytes(), &Match::Exact);
+        node = node.add("ad".as_bytes(), &Match::Exact);
         node = node.add("as".as_bytes(), &Match::Exact);
         node = node.add("at".as_bytes(), &Match::Exact);
-        // node = node.add("add".as_bytes(), &Match::Exact);
+        node = node.add("ace".as_bytes(), &Match::Exact);
 
         if let NodeEnum::N4(root_node) = node {
-            println!("{:?}",root_node.keys);
-            println!("{:?}", root_node.children);
-            if let NodeEnum::N4(a_node) = &root_node.children[0] {
-                println!("{:?}",a_node.keys);
-                println!("{:?}", a_node.children);
+            println!("root: {:#?}",root_node);
+            if let NodeEnum::N16(a_node) = &root_node.children[0] {
+                println!("child 1: {:#?}",a_node);
             }
         }
     }

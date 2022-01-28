@@ -1,11 +1,11 @@
 use crate::trie::enums::{Case, Match};
-use crate::trie::node::{Link, Node};
+use crate::trie::node::{Link, OldNode};
 use std::borrow::Borrow;
 
 pub struct Trie {
     matching: Match,
     case: Case,
-    index: Node, //change this to Link for consistency
+    index: OldNode, //change this to Link for consistency
 }
 
 //TODO: add fn options() for discovering autocomplete options
@@ -14,7 +14,7 @@ impl Trie {
         Trie {
             matching: matching,
             case: case,
-            index: Node::new(),
+            index: OldNode::new(),
         }
     }
 
@@ -54,10 +54,10 @@ impl Trie {
 
 #[cfg(test)] //module should only be compiled for testing
 mod test {
-    use super::{Case, Match, Node, Trie};
+    use super::{Case, Match, OldNode, Trie};
 
     //doesnt check terminal char
-    fn only_has_chars(n: &Node, s: &str) -> bool {
+    fn only_has_chars(n: &OldNode, s: &str) -> bool {
         for i in 0_u8..255_u8 {
             let contain = s.contains(&String::from(i as char));
             if contain != n.get_node(i as usize).is_some() {

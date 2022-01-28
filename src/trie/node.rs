@@ -1,11 +1,11 @@
 use crate::trie::enums::Match;
-use crate::trie::node::NodeEnum::{N256, NNone};
+use crate::trie::node::N::{N256, NNone};
 use arr_macro::arr;
 use std::cmp::Ordering;
 use std::mem;
 
-pub trait TrieNode: Sized {
-    fn add(mut self, value: &[u8], match_type: &Match) -> NodeEnum {
+pub trait Node: Sized {
+    fn add(mut self, value: &[u8], match_type: &Match) -> N {
         match value {
             [] => self.add_empty_case(match_type),
             [cur_value] => self.add_single_case(cur_value, match_type),
@@ -14,14 +14,14 @@ pub trait TrieNode: Sized {
             }
         }
     }
-    fn add_empty_case(self, match_type :&Match) -> NodeEnum;
-    fn add_single_case(self, cur_value: &u8, match_type: &Match) -> NodeEnum;
+    fn add_empty_case(self, match_type :&Match) -> N;
+    fn add_single_case(self, cur_value: &u8, match_type: &Match) -> N;
     fn add_multiple_case(
         self,
         cur_value: &u8,
         remaining_values: &[u8],
         match_type: &Match,
-    ) -> NodeEnum;
+    ) -> N;
     fn is_full(&self) -> bool;
     fn is_empty(&self) -> bool;
     fn is_terminal(&self) -> bool;
@@ -35,7 +35,7 @@ pub struct Node0 {
 #[derive(Debug)]
 pub struct Node4 {
     keys: [Option<u8>; 4], //Can remove this option and rely only on children option
-    children: Box<[NodeEnum; 4]>,
+    children: Box<[N; 4]>,
     size: usize,
     terminal: bool,
 }
@@ -44,7 +44,7 @@ pub struct Node4 {
 pub struct Node16 {
     keys: [Option<u8>; 16],
     //value represents value with matching node in children index
-    children: Box<[NodeEnum; 16]>,
+    children: Box<[N; 16]>,
     size: usize,
     terminal: bool,
 }
@@ -53,14 +53,14 @@ pub struct Node16 {
 pub struct Node48 {
     keys: [Option<u8>; 256],
     //index represents value, and value represents index in children
-    children: Box<[NodeEnum; 48]>,
+    children: Box<[N; 48]>,
     size: usize,
     terminal: bool,
 }
 
 #[derive(Debug)]
 pub struct Node256 {
-    children: Box<[NodeEnum; 256]>,
+    children: Box<[N; 256]>,
     size: usize,
     terminal: bool,
 }
@@ -69,7 +69,7 @@ pub struct Node256 {
 //FIXME this results in a union with a size equal to the largest object
 // consider boxing large variants OR remove enum
 #[derive(Debug)]
-pub enum NodeEnum {
+pub enum N {
     NNone,
     N0(Node0),
     N4(Node4),
@@ -78,14 +78,14 @@ pub enum NodeEnum {
     N256(Node256),
 }
 
-impl NodeEnum {
-    pub fn take(&mut self) -> NodeEnum {
+impl N {
+    pub fn take(&mut self) -> N {
         mem::replace(self, NNone)
     }
 }
-impl Default for NodeEnum {
+impl Default for N {
     fn default() -> Self {
-        NodeEnum::NNone
+        N::NNone
     }
 }
 
@@ -95,13 +95,13 @@ impl Node0 {
     }
 }
 
-impl TrieNode for Node0 {
-    fn add_empty_case(mut self, match_type :&Match) -> NodeEnum {
+impl Node for Node0 {
+    fn add_empty_case(mut self, match_type :&Match) -> N {
         self.terminal = true;
-        NodeEnum::N0(self)
+        N::N0(self)
     }
 
-    fn add_single_case(mut self, cur_value: &u8, match_type: &Match) -> NodeEnum {
+    fn add_single_case(mut self, cur_value: &u8, match_type: &Match) -> N {
         //need to upgrade to Node4 to add a value
         Node4::from(self).add_single_case(cur_value, match_type)
     }
@@ -111,7 +111,7 @@ impl TrieNode for Node0 {
         cur_value: &u8,
         remaining_values: &[u8],
         match_type: &Match,
-    ) -> NodeEnum {
+    ) -> N {
         //need to upgrade to Node4 to add a value
         Node4::from(self).add_multiple_case(cur_value, remaining_values, match_type)
     }
@@ -133,7 +133,7 @@ impl Node4 {
     pub fn new() -> Self {
         Node4 {
             keys: [None; 4],
-            children: Box::new(arr![NodeEnum::NNone; 4]),
+            children: Box::new(arr![N::NNone; 4]),
             size: 0,
             terminal: false,
         }
@@ -147,14 +147,14 @@ impl Node4 {
     }
 }
 
-impl TrieNode for Node4 {
+impl Node for Node4 {
     //TODO: will need to be enhanced in the future to support the match types
-    fn add_empty_case(mut self, match_type :&Match) -> NodeEnum {
+    fn add_empty_case(mut self, match_type :&Match) -> N {
         self.terminal = true;
-        NodeEnum::N4(self)
+        N::N4(self)
     }
 
-    fn add_single_case(mut self, cur_value: &u8, match_type: &Match) -> NodeEnum {
+    fn add_single_case(mut self, cur_value: &u8, match_type: &Match) -> N {
         //check if value exists already
         if let Some(index) = self
             .keys
@@ -163,7 +163,7 @@ impl TrieNode for Node4 {
         {
             //TODO: consider implementing a swap function or changing add to mutable borrow
             self.children[index] = self.children[index].take().add(&[], match_type);
-            NodeEnum::N4(self)
+            N::N4(self)
         } else {
             //value doesnt exist yet
             //expand to node16 and then add new value
@@ -175,7 +175,7 @@ impl TrieNode for Node4 {
                 self.children[self.size] = Node0::new().add(&[], match_type);
 
                 self.size += 1;
-                NodeEnum::N4(self)
+                N::N4(self)
             }
         }
     }
@@ -185,12 +185,12 @@ impl TrieNode for Node4 {
         cur_value: &u8,
         remaining_values: &[u8],
         match_type: &Match,
-    ) -> NodeEnum {
+    ) -> N {
         //check if value exists already
         if let Some(index) = self.keys.iter().position(|v| v.is_some() && v.unwrap() == *cur_value)
         {
             self.children[index] = self.children[index].take().add(remaining_values, match_type);
-            NodeEnum::N4(self)
+            N::N4(self)
         } else if self.is_full() { //value doesnt exist yet
             //expand to node16 and then add new value
 
@@ -209,7 +209,7 @@ impl TrieNode for Node4 {
             self.children[self.size] = Node4::new().add(remaining_values, match_type);
 
             self.size += 1;
-            NodeEnum::N4(self)
+            N::N4(self)
         }
     }
 
@@ -231,7 +231,7 @@ impl Node16 {
     pub fn new() -> Self {
         Node16 {
             keys: [None; 16],
-            children: Box::new(arr![NodeEnum::NNone; 16]),
+            children: Box::new(arr![N::NNone; 16]),
             size: 0,
             terminal: false,
         }
@@ -272,13 +272,13 @@ impl Node16 {
     }
 }
 
-impl TrieNode for Node16 {
-    fn add_empty_case(mut self, match_type :&Match) -> NodeEnum {
+impl Node for Node16 {
+    fn add_empty_case(mut self, match_type :&Match) -> N {
         self.terminal = true;
-        NodeEnum::N16(self)
+        N::N16(self)
     }
 
-    fn add_single_case(mut self, cur_value: &u8, match_type: &Match) -> NodeEnum {
+    fn add_single_case(mut self, cur_value: &u8, match_type: &Match) -> N {
         //check if value exists already
         match self
             .keys
@@ -286,7 +286,7 @@ impl TrieNode for Node16 {
         {
             Ok(index) => {
                 self.children[index] = self.children[index].take().add(&[], match_type);
-                NodeEnum::N16(self)
+                N::N16(self)
             }
             Err(index) => {
                 //expand to node48 and then add new value
@@ -304,7 +304,7 @@ impl TrieNode for Node16 {
                     self.children[index] = Node0::new().add(&[], match_type);
 
                     self.size += 1;
-                    NodeEnum::N16(self)
+                    N::N16(self)
                 }
             }
         }
@@ -315,7 +315,7 @@ impl TrieNode for Node16 {
         cur_value: &u8,
         remaining_values: &[u8],
         match_type: &Match,
-    ) -> NodeEnum {
+    ) -> N {
         //check if value exists already
         match self
             .keys
@@ -329,7 +329,7 @@ impl TrieNode for Node16 {
                 self.children[index] = self.children[index]
                     .take()
                     .add(remaining_values, match_type);
-                NodeEnum::N16(self)
+                N::N16(self)
             }
             Err(index) => {
                 //expand to node48 and then add new value
@@ -344,7 +344,7 @@ impl TrieNode for Node16 {
                     self.children[index] = Node0::new().add(remaining_values, match_type);
 
                     self.size += 1;
-                    NodeEnum::N16(self)
+                    N::N16(self)
                 }
             }
         }
@@ -367,7 +367,7 @@ impl Node48 {
     pub fn new() -> Self {
         Node48 {
             keys: [None; 256],
-            children: Box::new(arr![NodeEnum::NNone; 48]),
+            children: Box::new(arr![N::NNone; 48]),
             size: 0,
             terminal: false,
         }
@@ -389,20 +389,20 @@ impl Node48 {
     }
 }
 
-impl TrieNode for Node48 {
-    fn add_empty_case(mut self, match_type :&Match) -> NodeEnum {
+impl Node for Node48 {
+    fn add_empty_case(mut self, match_type :&Match) -> N {
         self.terminal = true;
-        NodeEnum::N48(self)
+        N::N48(self)
     }
 
     //TODO: can specific adds (e.g. add_empty_case) be mutable borrows and general add be a move?
-    fn add_single_case(mut self, cur_value: &u8, match_type: &Match) -> NodeEnum {
+    fn add_single_case(mut self, cur_value: &u8, match_type: &Match) -> N {
         let cur_value_index = *cur_value as usize;
         //if exists
         if let Some(key) = self.keys[cur_value_index] {
             let key_index = key as usize;
             self.children[key_index] = self.children[key_index].take().add(&[], match_type);
-            NodeEnum::N48(self)
+            N::N48(self)
         } else if self.is_full() {
             Node256::from(self).add_single_case(cur_value, match_type)
         } else {
@@ -410,7 +410,7 @@ impl TrieNode for Node48 {
             self.keys[cur_value_index] = Some(self.size as u8);
             self.children[self.size] = Node0::new().add(&[], match_type);
             self.size += 1;
-            NodeEnum::N48(self)
+            N::N48(self)
         }
     }
 
@@ -419,13 +419,13 @@ impl TrieNode for Node48 {
         cur_value: &u8,
         remaining_values: &[u8],
         match_type: &Match,
-    ) -> NodeEnum {
+    ) -> N {
         let cur_value_index = *cur_value as usize;
         //if exists
         if let Some(key) = self.keys[cur_value_index] {
             let key_index = key as usize;
             self.children[key_index] = self.children[key_index].take().add(remaining_values, match_type);
-            NodeEnum::N48(self)
+            N::N48(self)
         } else if self.is_full() {
 
             Node256::from(self).add_multiple_case(cur_value, remaining_values, match_type)
@@ -434,7 +434,7 @@ impl TrieNode for Node48 {
             self.keys[cur_value_index] = Some(self.size as u8);
             self.children[self.size] = Node0::new().add(remaining_values, match_type);
             self.size += 1;
-            NodeEnum::N48(self)
+            N::N48(self)
         }
     }
 
@@ -454,7 +454,7 @@ impl TrieNode for Node48 {
 impl Node256 {
     pub fn new() -> Self {
         Node256 {
-            children: Box::new(arr![NodeEnum::NNone; 256]),
+            children: Box::new(arr![N::NNone; 256]),
             size: 0,
             terminal: false,
         }
@@ -476,26 +476,26 @@ impl Node256 {
     }
 }
 
-impl TrieNode for Node256 {
-    fn add_empty_case(mut self, match_type :&Match) -> NodeEnum {
+impl Node for Node256 {
+    fn add_empty_case(mut self, match_type :&Match) -> N {
         self.terminal = true;
-        NodeEnum::N256(self)
+        N::N256(self)
     }
 
-    fn add_single_case(mut self, cur_value: &u8, match_type: &Match) -> NodeEnum {
+    fn add_single_case(mut self, cur_value: &u8, match_type: &Match) -> N {
         let cur_value_index = *cur_value as usize;
         //if exists
         match self.children[cur_value_index].take() {
-            NodeEnum::NNone => {
+            N::NNone => {
                 //TODO: does this mean I should implement a NodeNull type?
                 self.children[cur_value_index] = Node0::new().add(&[], match_type);
                 self.size += 1;
-                NodeEnum::N256(self)
+                N::N256(self)
             }
             node => {
                 self.children[cur_value_index] = node.add(&[*cur_value], match_type);
                 self.size += 1;
-                NodeEnum::N256(self)
+                N::N256(self)
             }
         }
     }
@@ -505,20 +505,20 @@ impl TrieNode for Node256 {
         cur_value: &u8,
         remaining_values: &[u8],
         match_type: &Match,
-    ) -> NodeEnum {
+    ) -> N {
         let cur_value_index = *cur_value as usize;
         //if exists
         match self.children[cur_value_index].take() {
-            NodeEnum::NNone => {
+            N::NNone => {
                 //TODO: does this mean I should implement a NodeNull type?
                 self.children[cur_value_index] = Node0::new().add(remaining_values, match_type);
                 self.size += 1;
-                NodeEnum::N256(self)
+                N::N256(self)
             }
             node => {
                 self.children[cur_value_index] = node.add(remaining_values, match_type);
                 self.size += 1;
-                NodeEnum::N256(self)
+                N::N256(self)
             }
         }
     }
@@ -536,37 +536,37 @@ impl TrieNode for Node256 {
     }
 }
 
-impl NodeEnum {
+impl N {
     pub fn add(self, value: &[u8], match_type: &Match) -> Self {
         match self {
-            NodeEnum::NNone => NodeEnum::N0(Node0::new()),
-            NodeEnum::N0(n) => n.add(value, match_type),
-            NodeEnum::N4(n) => n.add(value, match_type),
-            NodeEnum::N16(n) => n.add(value, match_type),
-            NodeEnum::N48(n) => n.add(value, match_type),
-            NodeEnum::N256(n) => n.add(value, match_type),
+            N::NNone => N::N0(Node0::new()),
+            N::N0(n) => n.add(value, match_type),
+            N::N4(n) => n.add(value, match_type),
+            N::N16(n) => n.add(value, match_type),
+            N::N48(n) => n.add(value, match_type),
+            N::N256(n) => n.add(value, match_type),
         }
     }
 
-    fn add_empty_case(self, match_type :&Match) -> NodeEnum {
+    fn add_empty_case(self, match_type :&Match) -> N {
         match self {
-            NodeEnum::NNone => NodeEnum::N0(Node0::new()), //FIXME new probably needs match_type as well
-            NodeEnum::N0(n) => n.add_empty_case(match_type),
-            NodeEnum::N4(n) => n.add_empty_case(match_type),
-            NodeEnum::N16(n) => n.add_empty_case(match_type),
-            NodeEnum::N48(n) => n.add_empty_case(match_type),
-            NodeEnum::N256(n) => n.add_empty_case(match_type),
+            N::NNone => N::N0(Node0::new()), //FIXME new probably needs match_type as well
+            N::N0(n) => n.add_empty_case(match_type),
+            N::N4(n) => n.add_empty_case(match_type),
+            N::N16(n) => n.add_empty_case(match_type),
+            N::N48(n) => n.add_empty_case(match_type),
+            N::N256(n) => n.add_empty_case(match_type),
         }
     }
 
-    fn add_single_case(self, cur_value: &u8, match_type: &Match) -> NodeEnum {
+    fn add_single_case(self, cur_value: &u8, match_type: &Match) -> N {
         match self {
-            NodeEnum::NNone => NodeEnum::N0(Node0::new()),
-            NodeEnum::N0(n) => n.add_single_case(cur_value, match_type),
-            NodeEnum::N4(n) => n.add_single_case(cur_value, match_type),
-            NodeEnum::N16(n) => n.add_single_case(cur_value, match_type),
-            NodeEnum::N48(n) => n.add_single_case(cur_value, match_type),
-            NodeEnum::N256(n) => n.add_single_case(cur_value, match_type),
+            N::NNone => N::N0(Node0::new()),
+            N::N0(n) => n.add_single_case(cur_value, match_type),
+            N::N4(n) => n.add_single_case(cur_value, match_type),
+            N::N16(n) => n.add_single_case(cur_value, match_type),
+            N::N48(n) => n.add_single_case(cur_value, match_type),
+            N::N256(n) => n.add_single_case(cur_value, match_type),
         }
     }
 
@@ -575,33 +575,33 @@ impl NodeEnum {
         cur_value: &u8,
         remaining_values: &[u8],
         match_type: &Match,
-    ) -> NodeEnum {
+    ) -> N {
         match self {
-            NodeEnum::NNone => NodeEnum::N0(Node0::new()),
-            NodeEnum::N0(n) => n.add_multiple_case(cur_value, remaining_values, match_type),
-            NodeEnum::N4(n) => n.add_multiple_case(cur_value, remaining_values, match_type),
-            NodeEnum::N16(n) => n.add_multiple_case(cur_value, remaining_values, match_type),
-            NodeEnum::N48(n) => n.add_multiple_case(cur_value, remaining_values, match_type),
-            NodeEnum::N256(n) => n.add_multiple_case(cur_value, remaining_values, match_type),
+            N::NNone => N::N0(Node0::new()),
+            N::N0(n) => n.add_multiple_case(cur_value, remaining_values, match_type),
+            N::N4(n) => n.add_multiple_case(cur_value, remaining_values, match_type),
+            N::N16(n) => n.add_multiple_case(cur_value, remaining_values, match_type),
+            N::N48(n) => n.add_multiple_case(cur_value, remaining_values, match_type),
+            N::N256(n) => n.add_multiple_case(cur_value, remaining_values, match_type),
         }
     }
 }
 
 //Old implementation starts here
-pub type Link = Option<Box<Node>>;
-pub struct Node {
+pub type Link = Option<Box<OldNode>>;
+pub struct OldNode {
     children: [Link; 257],
 }
 
-impl Node {
+impl OldNode {
     //TODO: make variable length based off settings
     pub fn new() -> Self {
-        Node {
+        OldNode {
             children: arr![None; 257],
         }
     }
 
-    pub fn get_node(&self, i: usize) -> Option<&Node> {
+    pub fn get_node(&self, i: usize) -> Option<&OldNode> {
         self.children[i].as_ref().map(|c| c.as_ref())
     }
 
@@ -610,27 +610,27 @@ impl Node {
             Match::Exact | Match::Prefix => {
                 let mut cur = self;
                 for c in value {
-                    cur = cur.children[(*c) as usize].get_or_insert(Box::new(Node::new()));
+                    cur = cur.children[(*c) as usize].get_or_insert(Box::new(OldNode::new()));
                 }
                 //add terminal char when match is exact
                 if let Match::Exact = match_type {
-                    cur.children[257 - 1] = Some(Box::new(Node::new()))
+                    cur.children[257 - 1] = Some(Box::new(OldNode::new()))
                 }
             }
             Match::PrefixPostfix => {
                 //takes 0+n first characters off string
-                let mut cur: &mut Node;
+                let mut cur: &mut OldNode;
                 for j in 0..value.len() {
                     cur = self;
                     for c in value[j..].iter() {
-                        cur = cur.children[(*c) as usize].get_or_insert(Box::new(Node::new()));
+                        cur = cur.children[(*c) as usize].get_or_insert(Box::new(OldNode::new()));
                     }
                 }
             }
         }
     }
 
-    pub fn exists(&self, c: u8) -> Option<&Node> {
+    pub fn exists(&self, c: u8) -> Option<&OldNode> {
         self.children[c as usize].as_ref().map(|c| c.as_ref())
     }
 }
@@ -641,16 +641,16 @@ mod tests {
 
     #[test]
     fn trial_run_test() {
-        let mut node = NodeEnum::N0(Node0::new());
+        let mut node = N::N0(Node0::new());
         node = node.add("ab".as_bytes(), &Match::Exact);
         node = node.add("ad".as_bytes(), &Match::Exact);
         node = node.add("as".as_bytes(), &Match::Exact);
         node = node.add("at".as_bytes(), &Match::Exact);
         node = node.add("ace".as_bytes(), &Match::Exact);
 
-        if let NodeEnum::N4(root_node) = node {
+        if let N::N4(root_node) = node {
             println!("root: {:#?}",root_node);
-            if let NodeEnum::N16(a_node) = &root_node.children[0] {
+            if let N::N16(a_node) = &root_node.children[0] {
                 println!("child 1: {:#?}",a_node);
             }
         }
@@ -659,36 +659,36 @@ mod tests {
 
     #[test]
     fn test_all_upgrades_occur_exact_match() {
-        let mut node = NodeEnum::N0(Node0::new());
+        let mut node = N::N0(Node0::new());
         for i in 0..=3 {
             node = node.add(&[i], &Match::Exact);
         }
-        assert!(matches!(node, NodeEnum::N4(_)));
-        if let NodeEnum::N4(n) = &node {
+        assert!(matches!(node, N::N4(_)));
+        if let N::N4(n) = &node {
             assert_eq!(n.size, 4);
         }
 
         for i in 4..=15 {
             node = node.add(&[i], &Match::Exact);
         }
-        assert!(matches!(node, NodeEnum::N16(_)));
-        if let NodeEnum::N16(n) = &node {
+        assert!(matches!(node, N::N16(_)));
+        if let N::N16(n) = &node {
             assert_eq!(n.size, 16);
         }
 
         for i in 16..=47 {
             node = node.add(&[i], &Match::Exact);
         }
-        assert!(matches!(node, NodeEnum::N48(_)));
-        if let NodeEnum::N48(n) = &node {
+        assert!(matches!(node, N::N48(_)));
+        if let N::N48(n) = &node {
             assert_eq!(n.size, 48);
         }
 
         for i in 48..=255 {
             node = node.add(&[i], &Match::Exact);
         }
-        assert!(matches!(node, NodeEnum::N256(_)));
-        if let NodeEnum::N256(n) = &node {
+        assert!(matches!(node, N::N256(_)));
+        if let N::N256(n) = &node {
             assert_eq!(n.size, 256);
         }
 
@@ -696,7 +696,7 @@ mod tests {
 
     #[test]
     fn order_preserved_48_exact_match() {
-        let mut node = NodeEnum::N0(Node0::new());
+        let mut node = N::N0(Node0::new());
 
         for i in 0..=96 {
             if i % 2 == 0 {
@@ -704,7 +704,7 @@ mod tests {
             }
         }
 
-        if let NodeEnum::N48(n) = node {
+        if let N::N48(n) = node {
             for (i, &k) in n.keys.iter().enumerate() {
                 if i < 96 { //only first entries 48 considered
                     match k {
@@ -713,7 +713,7 @@ mod tests {
                         },
                         Some(c) => {
                             assert_eq!(i % 2, 0);
-                            assert!(matches!(&n.children[c as usize], NodeEnum::N0(_)));
+                            assert!(matches!(&n.children[c as usize], N::N0(_)));
                         },
                         _ => panic!()
                     }
@@ -724,7 +724,7 @@ mod tests {
 
     #[test]
     fn order_preserved_256_exact_match() {
-        let mut node = NodeEnum::N0(Node0::new());
+        let mut node = N::N0(Node0::new());
 
         for i in 0..=255 {
             if i % 2 == 0 {
@@ -732,11 +732,11 @@ mod tests {
             }
         }
 
-        if let NodeEnum::N256(n) = node {
+        if let N::N256(n) = node {
             for (i, c) in n.children.iter().enumerate() {
                 match &c {
-                    NodeEnum::NNone => assert_ne!(i % 2, 0),
-                    NodeEnum::N0(_) => assert_eq!(i % 2, 0),
+                    N::NNone => assert_ne!(i % 2, 0),
+                    N::N0(_) => assert_eq!(i % 2, 0),
                     _ => panic!()
                 }
             }

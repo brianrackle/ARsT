@@ -66,13 +66,15 @@ pub struct Node256 {
 }
 
 //see: https://www.the-paper-trail.org/post/art-paper-notes/
+//FIXME this results in a union with a size equal to the largest object
+// consider boxing large variants OR remove enum
 #[derive(Debug)]
 pub enum NodeEnum {
     NNone,
-    N0(Node0), //is_terminal should always be true for Node0, not sure if this is needed used only when leaf node is created
+    N0(Node0),
     N4(Node4),
     N16(Node16),
-    N48(Node48), //FIXME consider boxing large variants
+    N48(Node48),
     N256(Node256),
 }
 
@@ -99,7 +101,6 @@ impl TrieNode for Node0 {
         NodeEnum::N0(self)
     }
 
-    //TODO: review all new(terminal) usages to make sure they are correctly assigned
     fn add_single_case(mut self, cur_value: &u8, match_type: &Match) -> NodeEnum {
         //need to upgrade to Node4 to add a value
         Node4::from(self).add_single_case(cur_value, match_type)
@@ -242,7 +243,7 @@ impl Node16 {
         //the original indices will be used to create new arrays with the correct order
         let mut ordered_index_value = node.keys.iter().enumerate().collect::<Vec<_>>();
         ordered_index_value.sort_unstable_by(|(_, a), (_, b)| Node16::val_cmp(a, b));
-        //FIXME should be possible to do this without collecting into a vector
+        //FIXME should be possible to do this without collecting into a vecto
         let ordered_index = ordered_index_value
             .iter()
             .map(|(index, _)| *index)
@@ -290,7 +291,7 @@ impl TrieNode for Node16 {
             Err(index) => {
                 //expand to node48 and then add new value
                 if self.is_full() {
-                    //FIXME these return nodes are inconsistent. Some are returning the self (upgraded) and other are returning the child that is created
+                    //FIXME are these return nodes inconsistent. Some are returning the self (upgraded) and other are returning the child that is created
                     // need to determine which one should be returned, self or created child?
                     // need to map it out to determine what is getting returned and if its correct
                     Node48::from(self).add(&[*cur_value], match_type)
@@ -488,6 +489,7 @@ impl TrieNode for Node256 {
             NodeEnum::NNone => {
                 //TODO: does this mean I should implement a NodeNull type?
                 self.children[cur_value_index] = Node0::new().add(&[], match_type);
+                self.size += 1;
                 NodeEnum::N256(self)
             }
             node => {
@@ -510,6 +512,7 @@ impl TrieNode for Node256 {
             NodeEnum::NNone => {
                 //TODO: does this mean I should implement a NodeNull type?
                 self.children[cur_value_index] = Node0::new().add(remaining_values, match_type);
+                self.size += 1;
                 NodeEnum::N256(self)
             }
             node => {
@@ -650,6 +653,94 @@ mod tests {
             if let NodeEnum::N16(a_node) = &root_node.children[0] {
                 println!("child 1: {:#?}",a_node);
             }
+        }
+        // println!("root: {:#?}",node);
+    }
+
+    #[test]
+    fn test_all_upgrades_occur_exact_match() {
+        let mut node = NodeEnum::N0(Node0::new());
+        for i in 0..=3 {
+            node = node.add(&[i], &Match::Exact);
+        }
+        assert!(matches!(node, NodeEnum::N4(_)));
+        if let NodeEnum::N4(n) = &node {
+            assert_eq!(n.size, 4);
+        }
+
+        for i in 4..=15 {
+            node = node.add(&[i], &Match::Exact);
+        }
+        assert!(matches!(node, NodeEnum::N16(_)));
+        if let NodeEnum::N16(n) = &node {
+            assert_eq!(n.size, 16);
+        }
+
+        for i in 16..=47 {
+            node = node.add(&[i], &Match::Exact);
+        }
+        assert!(matches!(node, NodeEnum::N48(_)));
+        if let NodeEnum::N48(n) = &node {
+            assert_eq!(n.size, 48);
+        }
+
+        for i in 48..=255 {
+            node = node.add(&[i], &Match::Exact);
+        }
+        assert!(matches!(node, NodeEnum::N256(_)));
+        if let NodeEnum::N256(n) = &node {
+            assert_eq!(n.size, 256);
+        }
+
+    }
+
+    #[test]
+    fn order_preserved_48_exact_match() {
+        let mut node = NodeEnum::N0(Node0::new());
+
+        for i in 0..=96 {
+            if i % 2 == 0 {
+                node = node.add(&[i], &Match::Exact);
+            }
+        }
+
+        if let NodeEnum::N48(n) = node {
+            for (i, &k) in n.keys.iter().enumerate() {
+                if i < 96 { //only first entries 48 considered
+                    match k {
+                        None => {
+                            assert_ne!(i % 2, 0);
+                        },
+                        Some(c) => {
+                            assert_eq!(i % 2, 0);
+                            assert!(matches!(&n.children[c as usize], NodeEnum::N0(_)));
+                        },
+                        _ => panic!()
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn order_preserved_256_exact_match() {
+        let mut node = NodeEnum::N0(Node0::new());
+
+        for i in 0..=255 {
+            if i % 2 == 0 {
+                node = node.add(&[i], &Match::Exact);
+            }
+        }
+
+        if let NodeEnum::N256(n) = node {
+            for (i, c) in n.children.iter().enumerate() {
+                match &c {
+                    NodeEnum::NNone => assert_ne!(i % 2, 0),
+                    NodeEnum::N0(_) => assert_eq!(i % 2, 0),
+                    _ => panic!()
+                }
+            }
+
         }
     }
 }

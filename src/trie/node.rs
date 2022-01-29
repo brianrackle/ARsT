@@ -1,5 +1,5 @@
 use crate::trie::enums::Match;
-use crate::trie::node::N::{N256, NNone};
+use crate::trie::node::N::{N256, Empty};
 use arr_macro::arr;
 use std::cmp::Ordering;
 use std::mem;
@@ -70,7 +70,7 @@ pub struct Node256 {
 // consider boxing large variants OR remove enum
 #[derive(Debug)]
 pub enum N {
-    NNone,
+    Empty,
     N0(Box<Node0>),
     N4(Box<Node4>),
     N16(Box<Node16>),
@@ -80,12 +80,12 @@ pub enum N {
 
 impl N {
     pub fn take(&mut self) -> N {
-        mem::replace(self, NNone)
+        mem::replace(self, Empty)
     }
 }
 impl Default for N {
     fn default() -> Self {
-        N::NNone
+        N::Empty
     }
 }
 
@@ -133,7 +133,7 @@ impl Node4 {
     pub fn new() -> Self {
         Node4 {
             keys: [None; 4],
-            children: arr![N::NNone; 4],
+            children: arr![N::Empty; 4],
             size: 0,
             terminal: false,
         }
@@ -231,7 +231,7 @@ impl Node16 {
     pub fn new() -> Self {
         Node16 {
             keys: [None; 16],
-            children: arr![N::NNone; 16],
+            children: arr![N::Empty; 16],
             size: 0,
             terminal: false,
         }
@@ -367,7 +367,7 @@ impl Node48 {
     pub fn new() -> Self {
         Node48 {
             keys: [None; 256],
-            children: arr![N::NNone; 48],
+            children: arr![N::Empty; 48],
             size: 0,
             terminal: false,
         }
@@ -454,7 +454,7 @@ impl Node for Node48 {
 impl Node256 {
     pub fn new() -> Self {
         Node256 {
-            children: arr![N::NNone; 256],
+            children: arr![N::Empty; 256],
             size: 0,
             terminal: false,
         }
@@ -486,7 +486,7 @@ impl Node for Node256 {
         let cur_value_index = *cur_value as usize;
         //if exists
         match self.children[cur_value_index].take() {
-            N::NNone => {
+            N::Empty => {
                 //TODO: does this mean I should implement a NodeNull type?
                 self.children[cur_value_index] = Node0::new().add(&[], match_type);
                 self.size += 1;
@@ -509,7 +509,7 @@ impl Node for Node256 {
         let cur_value_index = *cur_value as usize;
         //if exists
         match self.children[cur_value_index].take() {
-            N::NNone => {
+            N::Empty => {
                 //TODO: does this mean I should implement a NodeNull type?
                 self.children[cur_value_index] = Node0::new().add(remaining_values, match_type);
                 self.size += 1;
@@ -539,7 +539,7 @@ impl Node for Node256 {
 impl N {
     pub fn add(self, value: &[u8], match_type: &Match) -> Self {
         match self {
-            N::NNone => N::N0(Box::new(Node0::new())),
+            N::Empty => N::N0(Box::new(Node0::new())),
             N::N0(n) => n.add(value, match_type),
             N::N4(n) => n.add(value, match_type),
             N::N16(n) => n.add(value, match_type),
@@ -550,7 +550,7 @@ impl N {
 
     fn add_empty_case(self, match_type :&Match) -> N {
         match self {
-            N::NNone => N::N0(Box::new(Node0::new())), //FIXME new probably needs match_type as well
+            N::Empty => N::N0(Box::new(Node0::new())), //FIXME new probably needs match_type as well
             N::N0(n) => n.add_empty_case(match_type),
             N::N4(n) => n.add_empty_case(match_type),
             N::N16(n) => n.add_empty_case(match_type),
@@ -561,7 +561,7 @@ impl N {
 
     fn add_single_case(self, cur_value: &u8, match_type: &Match) -> N {
         match self {
-            N::NNone => N::N0(Box::new(Node0::new())),
+            N::Empty => N::N0(Box::new(Node0::new())),
             N::N0(n) => n.add_single_case(cur_value, match_type),
             N::N4(n) => n.add_single_case(cur_value, match_type),
             N::N16(n) => n.add_single_case(cur_value, match_type),
@@ -577,7 +577,7 @@ impl N {
         match_type: &Match,
     ) -> N {
         match self {
-            N::NNone => N::N0(Box::new(Node0::new())),
+            N::Empty => N::N0(Box::new(Node0::new())),
             N::N0(n) => n.add_multiple_case(cur_value, remaining_values, match_type),
             N::N4(n) => n.add_multiple_case(cur_value, remaining_values, match_type),
             N::N16(n) => n.add_multiple_case(cur_value, remaining_values, match_type),
@@ -735,7 +735,7 @@ mod tests {
         if let N::N256(n) = node {
             for (i, c) in n.children.iter().enumerate() {
                 match &c {
-                    N::NNone => assert_ne!(i % 2, 0),
+                    N::Empty => assert_ne!(i % 2, 0),
                     N::N0(_) => assert_eq!(i % 2, 0),
                     _ => panic!()
                 }

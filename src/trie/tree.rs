@@ -8,6 +8,9 @@ pub struct Trie {
     index: OldNode, //change this to Link for consistency
 }
 
+//FIXME Match should be implemented at tree level
+// postfix = "cat", "at", "t"
+// prefix = ignore terminals
 //TODO: add fn options() for discovering autocomplete options
 impl Trie {
     pub fn new(matching: Match, case: Case) -> Self {

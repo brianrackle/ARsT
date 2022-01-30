@@ -5,28 +5,25 @@ use std::cmp::Ordering;
 use std::mem;
 
 pub trait Node: Sized {
-    fn add(mut self, value: &[u8], match_type: &Match) -> N {
+    fn add(&mut self, value: &[u8]) -> N {
         match value {
-            [] => self.add_empty_case(match_type),
-            [cur_value] => self.add_single_case(cur_value, match_type),
+            [] => self.add_empty_case(),
+            [cur_value] => self.add_single_case(cur_value),
             [cur_value, remaining_values @ ..] => {
-                self.add_multiple_case(cur_value, remaining_values, match_type)
+                self.add_multiple_case(cur_value, remaining_values)
             }
         }
     }
-    fn add_empty_case(self, match_type :&Match) -> N;
-    fn add_single_case(self, cur_value: &u8, match_type: &Match) -> N;
-    fn add_multiple_case(
-        self,
-        cur_value: &u8,
-        remaining_values: &[u8],
-        match_type: &Match,
-    ) -> N;
+    fn add_empty_case(&mut self) -> N;
+    fn add_single_case(&mut self, cur_value: &u8) -> N;
+    fn add_multiple_case(&mut self, cur_value: &u8, remaining_values: &[u8]) -> N;
+    fn get_size(&self) -> usize;
     fn is_full(&self) -> bool;
     fn is_empty(&self) -> bool;
     fn is_terminal(&self) -> bool;
 }
 
+//FIXME dont use terminal will mean smallest node to start with data is n4
 #[derive(Debug)]
 pub struct Node0 {
     terminal: bool,
@@ -78,17 +75,6 @@ pub enum N {
     N256(Box<Node256>),
 }
 
-impl N {
-    pub fn take(&mut self) -> N {
-        mem::replace(self, Empty)
-    }
-}
-impl Default for N {
-    fn default() -> Self {
-        N::Empty
-    }
-}
-
 impl Node0 {
     pub fn new() -> Self {
         Node0 { terminal: false }
@@ -96,24 +82,29 @@ impl Node0 {
 }
 
 impl Node for Node0 {
-    fn add_empty_case(mut self, match_type :&Match) -> N {
+
+    //FIXME rename add to create to indicate replace is necessary after call
+    fn add_empty_case(&mut self) -> N {
         self.terminal = true;
-        N::N0(Box::new(self))
+        N::Empty
     }
 
-    fn add_single_case(mut self, cur_value: &u8, match_type: &Match) -> N {
+    fn add_single_case(&mut self, cur_value: &u8) -> N {
         //need to upgrade to Node4 to add a value
-        Node4::from(self).add_single_case(cur_value, match_type)
+        let mut new_node = Node4::from(self);
+        new_node.add_single_case(cur_value);
+        N::N4(Box::new(new_node))
     }
 
-    fn add_multiple_case(
-        mut self,
-        cur_value: &u8,
-        remaining_values: &[u8],
-        match_type: &Match,
-    ) -> N {
+    fn add_multiple_case(&mut self, cur_value: &u8, remaining_values: &[u8]) -> N {
         //need to upgrade to Node4 to add a value
-        Node4::from(self).add_multiple_case(cur_value, remaining_values, match_type)
+        let mut new_node = Node4::from(self);
+        new_node.add_multiple_case(cur_value, remaining_values);
+        N::N4(Box::new(new_node))
+    }
+
+    fn get_size(&self) -> usize {
+        0
     }
 
     fn is_full(&self) -> bool {
@@ -139,7 +130,7 @@ impl Node4 {
         }
     }
 
-    pub fn from(mut node: Node0) -> Self {
+    pub fn from(node: &mut Node0) -> Self {
         let mut new_node = Node4::new();
         new_node.terminal = node.terminal;
         new_node.size = 0;
@@ -148,49 +139,50 @@ impl Node4 {
 }
 
 impl Node for Node4 {
-    //TODO: will need to be enhanced in the future to support the match types
-    fn add_empty_case(mut self, match_type :&Match) -> N {
+    fn add_empty_case(&mut self) -> N {
         self.terminal = true;
-        N::N4(Box::new(self))
+        N::Empty
     }
 
-    fn add_single_case(mut self, cur_value: &u8, match_type: &Match) -> N {
+    fn add_single_case(&mut self, cur_value: &u8) -> N {
         //check if value exists already
         if let Some(index) = self
             .keys
             .iter()
             .position(|v| v.is_some() && v.unwrap() == *cur_value)
         {
-            //TODO: consider implementing a swap function or changing add to mutable borrow
-            self.children[index] = self.children[index].take().add(&[], match_type);
-            N::N4(Box::new(self))
+            match self.children[index].add(&[]) {
+                N::Empty => {},
+                n => {self.children[index] = n;}
+            }
+            N::Empty
         } else {
             //value doesnt exist yet
             //expand to node16 and then add new value
             if self.is_full() {
-                Node16::from(self).add(&[*cur_value], match_type)
+                let mut new_node = Node16::from(self);
+                new_node.add(&[*cur_value]);
+                N::N16(Box::new(new_node))
             } else {
                 //add value to existing Node4 if there is room
                 self.keys[self.size] = Some(*cur_value);
-                self.children[self.size] = Node0::new().add(&[], match_type);
+                self.children[self.size] = Node4::new().add(&[]);
 
                 self.size += 1;
-                N::N4(Box::new(self))
+                N::Empty
             }
         }
     }
 
-    fn add_multiple_case(
-        mut self,
-        cur_value: &u8,
-        remaining_values: &[u8],
-        match_type: &Match,
-    ) -> N {
+    fn add_multiple_case(&mut self, cur_value: &u8, remaining_values: &[u8]) -> N {
         //check if value exists already
         if let Some(index) = self.keys.iter().position(|v| v.is_some() && v.unwrap() == *cur_value)
         {
-            self.children[index] = self.children[index].take().add(remaining_values, match_type);
-            N::N4(Box::new(self))
+            match self.children[index].add(remaining_values) {
+                N::Empty => {},
+                n => {self.children[index] = n;}
+            }
+            N::Empty
         } else if self.is_full() { //value doesnt exist yet
             //expand to node16 and then add new value
 
@@ -202,15 +194,22 @@ impl Node for Node4 {
             // Node16::from(self).add(&[&[*cur_value], remaining_values].concat(), match_type)
             // OR
             // try std::deque
-            Node16::from(self).add_multiple_case(cur_value, remaining_values, match_type)
+            let mut new_node = Node16::from(self);
+            new_node.add_multiple_case(cur_value, remaining_values);
+            N::N16(Box::new(new_node))
+
         } else {
             //add value to existing Node4 if there is room
             self.keys[self.size] = Some(*cur_value);
-            self.children[self.size] = Node4::new().add(remaining_values, match_type);
+            self.children[self.size] = Node4::new().add(remaining_values);
 
             self.size += 1;
-            N::N4(Box::new(self))
+            N::Empty
         }
+    }
+
+    fn get_size(&self) -> usize {
+        self.size
     }
 
     fn is_full(&self) -> bool {
@@ -237,10 +236,10 @@ impl Node16 {
         }
     }
 
-    pub fn from(mut node: Node4) -> Self {
+    //sort the keys and original indices of the keys
+    //the original indices will be used to create new arrays with the correct order
+    pub fn from(node: &mut Node4) -> Self {
         let mut new_node = Node16::new();
-        //sort the keys and original indices of the keys
-        //the original indices will be used to create new arrays with the correct order
         let mut ordered_index_value = node.keys.iter().enumerate().collect::<Vec<_>>();
         ordered_index_value.sort_unstable_by(|(_, a), (_, b)| Node16::val_cmp(a, b));
         //FIXME should be possible to do this without collecting into a vecto
@@ -251,7 +250,7 @@ impl Node16 {
         //order arrays based on the ordered indices
         for (target_i, source_i) in ordered_index.iter().enumerate() {
             new_node.keys[target_i] = node.keys[(*source_i)].take();
-            new_node.children[target_i] = node.children[*source_i].take(); //same function used by Option::take to replace element
+            new_node.children[target_i] = node.children[*source_i].take();
         }
 
         new_node.terminal = node.terminal;
@@ -273,20 +272,23 @@ impl Node16 {
 }
 
 impl Node for Node16 {
-    fn add_empty_case(mut self, match_type :&Match) -> N {
+    fn add_empty_case(&mut self) -> N {
         self.terminal = true;
-        N::N16(Box::new(self))
+        N::Empty
     }
 
-    fn add_single_case(mut self, cur_value: &u8, match_type: &Match) -> N {
+    fn add_single_case(&mut self, cur_value: &u8) -> N {
         //check if value exists already
         match self
             .keys
             .binary_search_by(|probe| Node16::val_cmp(probe, &Some(*cur_value)))
         {
             Ok(index) => {
-                self.children[index] = self.children[index].take().add(&[], match_type);
-                N::N16(Box::new(self))
+                match self.children[index].add(&[]) {
+                    N::Empty => {},
+                    n => {self.children[index] = n;}
+                }
+                N::Empty
             }
             Err(index) => {
                 //expand to node48 and then add new value
@@ -294,28 +296,25 @@ impl Node for Node16 {
                     //FIXME are these return nodes inconsistent. Some are returning the self (upgraded) and other are returning the child that is created
                     // need to determine which one should be returned, self or created child?
                     // need to map it out to determine what is getting returned and if its correct
-                    Node48::from(self).add(&[*cur_value], match_type)
+                    let mut new_node = Node48::from(self);
+                    new_node.add(&[*cur_value]);
+                    N::N48(Box::new(new_node))
                 } else {
                     //add value in sorted order to existing Node16 if there is room
                     self.keys[index..].rotate_right(1); //shift right from index
                     self.keys[index] = Some(*cur_value);
 
                     self.children[index..].rotate_right(1);
-                    self.children[index] = Node0::new().add(&[], match_type);
+                    self.children[index] = Node4::new().add(&[]);
 
                     self.size += 1;
-                    N::N16(Box::new(self))
+                    N::Empty
                 }
             }
         }
     }
 
-    fn add_multiple_case(
-        mut self,
-        cur_value: &u8,
-        remaining_values: &[u8],
-        match_type: &Match,
-    ) -> N {
+    fn add_multiple_case(&mut self, cur_value: &u8, remaining_values: &[u8]) -> N {
         //check if value exists already
         match self
             .keys
@@ -326,28 +325,35 @@ impl Node for Node16 {
             // add multiple is just add single to upgraded self, and add rest to it's newly created child...
             //instead
             Ok(index) => {
-                self.children[index] = self.children[index]
-                    .take()
-                    .add(remaining_values, match_type);
-                N::N16(Box::new(self))
+                match self.children[index].add(remaining_values) {
+                    N::Empty => {},
+                    n => {self.children[index] = n;}
+                }
+                N::Empty
             }
             Err(index) => {
                 //expand to node48 and then add new value
                 if self.is_full() {
-                    Node48::from(self).add_multiple_case(cur_value, remaining_values, match_type)
+                    let mut new_node = Node48::from(self);
+                    new_node.add_multiple_case(cur_value, remaining_values);
+                    N::N48(Box::new(new_node))
                 } else {
                     //add value in sorted order to existing Node16 if there is room
                     self.keys[index..].rotate_right(1); //shift right from index
                     self.keys[index] = Some(*cur_value);
 
                     self.children[index..].rotate_right(1);
-                    self.children[index] = Node0::new().add(remaining_values, match_type);
+                    self.children[index] = Node4::new().add(remaining_values);
 
                     self.size += 1;
-                    N::N16(Box::new(self))
+                    N::Empty
                 }
             }
         }
+    }
+
+    fn get_size(&self) -> usize {
+        self.size
     }
 
     fn is_full(&self) -> bool {
@@ -373,7 +379,7 @@ impl Node48 {
         }
     }
 
-    pub fn from(mut node: Node16) -> Self {
+    pub fn from(node: &mut Node16) -> Self {
         //add keys which point to appropriate child index
         let mut new_node = Node48::new();
         //index in within keys represents the u8 and its value represents the index in children
@@ -390,52 +396,60 @@ impl Node48 {
 }
 
 impl Node for Node48 {
-    fn add_empty_case(mut self, match_type :&Match) -> N {
+    fn add_empty_case(&mut self) -> N {
         self.terminal = true;
-        N::N48(Box::new(self))
+        N::Empty
     }
 
-    //TODO: can specific adds (e.g. add_empty_case) be mutable borrows and general add be a move?
-    fn add_single_case(mut self, cur_value: &u8, match_type: &Match) -> N {
+    fn add_single_case(&mut self, cur_value: &u8) -> N {
         let cur_value_index = *cur_value as usize;
         //if exists
         if let Some(key) = self.keys[cur_value_index] {
             let key_index = key as usize;
-            self.children[key_index] = self.children[key_index].take().add(&[], match_type);
-            N::N48(Box::new(self))
+            match self.children[key_index].add(&[]) {
+                N::Empty => {},
+                n => {self.children[key_index] = n;}
+            }
+            N::Empty
         } else if self.is_full() {
-            Node256::from(self).add_single_case(cur_value, match_type)
+            //FIXME I think I need to return the new node here
+            let mut new_node = Node256::from(self);
+            new_node.add_single_case(cur_value);
+            N::N256(Box::new(new_node))
         } else {
             //add to self
             self.keys[cur_value_index] = Some(self.size as u8);
-            self.children[self.size] = Node0::new().add(&[], match_type);
+            self.children[self.size] = Node4::new().add(&[]);
             self.size += 1;
-            N::N48(Box::new(self))
+            N::Empty
         }
     }
 
-    fn add_multiple_case(
-        mut self,
-        cur_value: &u8,
-        remaining_values: &[u8],
-        match_type: &Match,
-    ) -> N {
+    fn add_multiple_case(&mut self, cur_value: &u8, remaining_values: &[u8]) -> N {
         let cur_value_index = *cur_value as usize;
         //if exists
         if let Some(key) = self.keys[cur_value_index] {
             let key_index = key as usize;
-            self.children[key_index] = self.children[key_index].take().add(remaining_values, match_type);
-            N::N48(Box::new(self))
-        } else if self.is_full() {
-
-            Node256::from(self).add_multiple_case(cur_value, remaining_values, match_type)
+            match self.children[key_index].add(remaining_values) {
+                N::Empty => {},
+                n => {self.children[key_index] = n;}
+            }
+            N::Empty
+        } else if self.is_full() { //FIXME move to last condition to follow better upgrade logic (last condition is most complex
+            let mut new_node = Node256::from(self);
+            new_node.add_multiple_case(cur_value, remaining_values);
+            N::N256(Box::new(new_node))
         } else {
             //add to self
             self.keys[cur_value_index] = Some(self.size as u8);
-            self.children[self.size] = Node0::new().add(remaining_values, match_type);
+            self.children[self.size] = Node4::new().add(remaining_values);
             self.size += 1;
-            N::N48(Box::new(self))
+            N::Empty
         }
+    }
+
+    fn get_size(&self) -> usize {
+        self.size
     }
 
     fn is_full(&self) -> bool {
@@ -460,7 +474,8 @@ impl Node256 {
         }
     }
 
-    pub fn from(mut node: Node48) -> Self {
+    //FIXME change name to indicate that from consumes elements from input node
+    pub fn from(node: &mut Node48) -> Self {
         let mut new_node = Node256::new();
 
         for (index, key) in node.keys.iter().enumerate() {
@@ -477,50 +492,51 @@ impl Node256 {
 }
 
 impl Node for Node256 {
-    fn add_empty_case(mut self, match_type :&Match) -> N {
+    fn add_empty_case(&mut self) -> N {
         self.terminal = true;
-        N::N256(Box::new(self))
+        N::Empty
     }
 
-    fn add_single_case(mut self, cur_value: &u8, match_type: &Match) -> N {
+    fn add_single_case(&mut self, cur_value: &u8) -> N {
         let cur_value_index = *cur_value as usize;
         //if exists
-        match self.children[cur_value_index].take() {
+        match self.children[cur_value_index].take() { //FIXME I dont think I should take here
             N::Empty => {
-                //TODO: does this mean I should implement a NodeNull type?
-                self.children[cur_value_index] = Node0::new().add(&[], match_type);
+                self.children[cur_value_index] = Node4::new().add(&[]);
                 self.size += 1;
-                N::N256(Box::new(self))
+                N::Empty
             }
-            node => {
-                self.children[cur_value_index] = node.add(&[*cur_value], match_type);
-                self.size += 1;
-                N::N256(Box::new(self))
+            mut node => {
+                match node.add(&[*cur_value]) {
+                    N::Empty => {},
+                    n => {self.children[cur_value_index] = n;}
+                }
+                N::Empty
             }
         }
     }
 
-    fn add_multiple_case(
-        mut self,
-        cur_value: &u8,
-        remaining_values: &[u8],
-        match_type: &Match,
-    ) -> N {
+    fn add_multiple_case(&mut self, cur_value: &u8, remaining_values: &[u8]) -> N {
         let cur_value_index = *cur_value as usize;
         //if exists
         match self.children[cur_value_index].take() {
             N::Empty => {
-                //TODO: does this mean I should implement a NodeNull type?
-                self.children[cur_value_index] = Node0::new().add(remaining_values, match_type);
+                self.children[cur_value_index] = Node4::new().add(remaining_values);
                 self.size += 1;
-                N::N256(Box::new(self))
+                N::Empty
             }
-            node => {
-                self.children[cur_value_index] = node.add(remaining_values, match_type);
-                self.size += 1;
-                N::N256(Box::new(self))
+            mut node => {
+                match node.add(remaining_values) {
+                    N::Empty => {},
+                    n => {self.children[cur_value_index] = n;}
+                }
+                N::Empty
             }
         }
+    }
+
+    fn get_size(&self) -> usize {
+        self.size
     }
 
     fn is_full(&self) -> bool {
@@ -536,53 +552,64 @@ impl Node for Node256 {
     }
 }
 
+impl Default for N {
+    fn default() -> Self {
+        N::Empty
+    }
+}
+
 impl N {
-    pub fn add(self, value: &[u8], match_type: &Match) -> Self {
+    pub fn take(&mut self) -> N {
+        mem::replace(self, Empty)
+    }
+
+    // pub fn map(&)
+
+    pub fn add(&mut self, value: &[u8]) -> Self {
         match self {
             N::Empty => N::N0(Box::new(Node0::new())),
-            N::N0(n) => n.add(value, match_type),
-            N::N4(n) => n.add(value, match_type),
-            N::N16(n) => n.add(value, match_type),
-            N::N48(n) => n.add(value, match_type),
-            N::N256(n) => n.add(value, match_type),
+            N::N0(n) => n.add(value),
+            N::N4(n) => n.add(value),
+            N::N16(n) => n.add(value),
+            N::N48(n) => n.add(value),
+            N::N256(n) => n.add(value),
         }
     }
 
-    fn add_empty_case(self, match_type :&Match) -> N {
+    fn add_empty_case(&mut self) -> N {
         match self {
-            N::Empty => N::N0(Box::new(Node0::new())), //FIXME new probably needs match_type as well
-            N::N0(n) => n.add_empty_case(match_type),
-            N::N4(n) => n.add_empty_case(match_type),
-            N::N16(n) => n.add_empty_case(match_type),
-            N::N48(n) => n.add_empty_case(match_type),
-            N::N256(n) => n.add_empty_case(match_type),
+            N::Empty => N::N0(Box::new(Node0::new())),
+            N::N0(n) => n.add_empty_case(),
+            N::N4(n) => n.add_empty_case(),
+            N::N16(n) => n.add_empty_case(),
+            N::N48(n) => n.add_empty_case(),
+            N::N256(n) => n.add_empty_case(),
         }
     }
 
-    fn add_single_case(self, cur_value: &u8, match_type: &Match) -> N {
+    fn add_single_case(&mut self, cur_value: &u8) -> N {
         match self {
             N::Empty => N::N0(Box::new(Node0::new())),
-            N::N0(n) => n.add_single_case(cur_value, match_type),
-            N::N4(n) => n.add_single_case(cur_value, match_type),
-            N::N16(n) => n.add_single_case(cur_value, match_type),
-            N::N48(n) => n.add_single_case(cur_value, match_type),
-            N::N256(n) => n.add_single_case(cur_value, match_type),
+            N::N0(n) => n.add_single_case(cur_value),
+            N::N4(n) => n.add_single_case(cur_value),
+            N::N16(n) => n.add_single_case(cur_value),
+            N::N48(n) => n.add_single_case(cur_value),
+            N::N256(n) => n.add_single_case(cur_value),
         }
     }
 
     fn add_multiple_case(
-        self,
+        &mut self,
         cur_value: &u8,
-        remaining_values: &[u8],
-        match_type: &Match,
+        remaining_values: &[u8]
     ) -> N {
         match self {
             N::Empty => N::N0(Box::new(Node0::new())),
-            N::N0(n) => n.add_multiple_case(cur_value, remaining_values, match_type),
-            N::N4(n) => n.add_multiple_case(cur_value, remaining_values, match_type),
-            N::N16(n) => n.add_multiple_case(cur_value, remaining_values, match_type),
-            N::N48(n) => n.add_multiple_case(cur_value, remaining_values, match_type),
-            N::N256(n) => n.add_multiple_case(cur_value, remaining_values, match_type),
+            N::N0(n) => n.add_multiple_case(cur_value, remaining_values),
+            N::N4(n) => n.add_multiple_case(cur_value, remaining_values),
+            N::N16(n) => n.add_multiple_case(cur_value, remaining_values),
+            N::N48(n) => n.add_multiple_case(cur_value, remaining_values),
+            N::N256(n) => n.add_multiple_case(cur_value, remaining_values),
         }
     }
 }
@@ -594,7 +621,6 @@ pub struct OldNode {
 }
 
 impl OldNode {
-    //TODO: make variable length based off settings
     pub fn new() -> Self {
         OldNode {
             children: arr![None; 257],
@@ -642,11 +668,11 @@ mod tests {
     #[test]
     fn trial_run_test() {
         let mut node = N::N0(Box::new(Node0::new()));
-        node = node.add("ab".as_bytes(), &Match::Exact);
-        node = node.add("ad".as_bytes(), &Match::Exact);
-        node = node.add("as".as_bytes(), &Match::Exact);
-        node = node.add("at".as_bytes(), &Match::Exact);
-        node = node.add("ace".as_bytes(), &Match::Exact);
+        node = node.add("ab".as_bytes());
+        node = node.add("ad".as_bytes());
+        node = node.add("as".as_bytes());
+        node = node.add("at".as_bytes());
+        node = node.add("ace".as_bytes());
 
         if let N::N4(root_node) = node {
             println!("root: {:#?}",root_node);
@@ -660,32 +686,36 @@ mod tests {
     #[test]
     fn test_all_upgrades_occur_exact_match() {
         let mut node = N::N0(Box::new(Node0::new()));
-        for i in 0..=3 {
-            node = node.add(&[i], &Match::Exact);
+        node = node.add(&[0]);
+        for i in 1..=3 {
+            node.add(&[i]);
         }
         assert!(matches!(node, N::N4(_)));
         if let N::N4(n) = &node {
             assert_eq!(n.size, 4);
         }
 
-        for i in 4..=15 {
-            node = node.add(&[i], &Match::Exact);
+        node = node.add(&[4]);
+        for i in 5..=15 {
+            node.add(&[i]);
         }
         assert!(matches!(node, N::N16(_)));
         if let N::N16(n) = &node {
             assert_eq!(n.size, 16);
         }
 
-        for i in 16..=47 {
-            node = node.add(&[i], &Match::Exact);
+        node = node.add(&[16]);
+        for i in 17..=47 {
+            node.add(&[i]);
         }
         assert!(matches!(node, N::N48(_)));
         if let N::N48(n) = &node {
             assert_eq!(n.size, 48);
         }
 
-        for i in 48..=255 {
-            node = node.add(&[i], &Match::Exact);
+        node = node.add(&[48]);
+        for i in 49..=255 {
+            node.add(&[i]);
         }
         assert!(matches!(node, N::N256(_)));
         if let N::N256(n) = &node {
@@ -700,7 +730,7 @@ mod tests {
 
         for i in 0..=96 {
             if i % 2 == 0 {
-                node = node.add(&[i], &Match::Exact);
+                node = node.add(&[i]);
             }
         }
 
@@ -728,7 +758,7 @@ mod tests {
 
         for i in 0..=255 {
             if i % 2 == 0 {
-                node = node.add(&[i], &Match::Exact);
+                node = node.add(&[i]);
             }
         }
 

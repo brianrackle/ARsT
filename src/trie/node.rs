@@ -22,6 +22,7 @@ pub trait Node : Debug{
     fn upgrade(&mut self) -> Box<dyn Node>;
     fn terminate(&mut self);
     fn get_size(&self) -> usize;
+    fn get_capacity(&self) -> usize;
     fn is_full(&self) -> bool;
     fn is_empty(&self) -> bool;
     fn is_terminal(&self) -> bool;
@@ -85,15 +86,15 @@ impl Node for Node4 {
         } else {
             //value doesnt exist yet
             //expand to node16 and then add new value
-            if self.is_full() {
-                None
-            } else {
+            if !self.is_full() {
                 //add value to existing Node4 if there is room
                 let target_index = self.size;
                 self.keys[target_index] = Some(*cur_value);
                 self.children[target_index] = Some(Box::new(Node4::new()));
                 self.size += 1;
                 self.children[target_index].as_mut()
+            } else {
+                None
             }
         }
     }
@@ -108,6 +109,10 @@ impl Node for Node4 {
 
     fn get_size(&self) -> usize {
         self.size
+    }
+
+    fn get_capacity(&self) -> usize {
+        self.children.len()
     }
 
     fn is_full(&self) -> bool {
@@ -182,9 +187,7 @@ impl Node for Node16 {
             }
             Err(index) => {
                 //expand to node48 and then add new value
-                if self.is_full() {
-                    None
-                } else {
+                if !self.is_full() {
                     //add value in sorted order to existing Node16 if there is room
                     self.keys[index..].rotate_right(1); //shift right from index
                     self.keys[index] = Some(*cur_value);
@@ -194,6 +197,8 @@ impl Node for Node16 {
 
                     self.size += 1;
                     self.children[index].as_mut()
+                } else {
+                    None
                 }
             }
         }
@@ -209,6 +214,10 @@ impl Node for Node16 {
 
     fn get_size(&self) -> usize {
         self.size
+    }
+
+    fn get_capacity(&self) -> usize {
+        self.children.len()
     }
 
     fn is_full(&self) -> bool {
@@ -257,15 +266,15 @@ impl Node for Node48 {
         if let Some(key) = self.keys[cur_value_index] {
             let key_index = key as usize;
             self.children[key_index].as_mut()
-        } else if self.is_full() {
-            None
-        } else {
+        } else if !self.is_full() {
             //add to self
             let target_index = self.size;
             self.keys[cur_value_index] = Some(self.size as u8);
             self.children[target_index] = Some(Box::new(Node4::new()));
             self.size += 1;
             self.children[target_index].as_mut()
+        } else {
+            None
         }
     }
 
@@ -279,6 +288,10 @@ impl Node for Node48 {
 
     fn get_size(&self) -> usize {
         self.size
+    }
+
+    fn get_capacity(&self) -> usize {
+        self.children.len()
     }
 
     fn is_full(&self) -> bool {
@@ -348,6 +361,10 @@ impl Node for Node256 {
         self.size
     }
 
+    fn get_capacity(&self) -> usize {
+        self.children.len()
+    }
+
     fn is_full(&self) -> bool {
         self.size == self.children.len()
     }
@@ -415,7 +432,6 @@ mod tests {
 
     #[test]
     fn testing_idea() {
-
         let mut node :Box<dyn Node> = Box::new(Node4::new());
 
         node.add(&0);

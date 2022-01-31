@@ -18,8 +18,8 @@ pub trait Node : Debug{
     //         }
     //     }
     // }
-    // fn upgrade
     fn add(&mut self, cur_value: &u8) -> Option<&mut Box<dyn Node>>;
+    fn upgrade(&mut self) -> Box<dyn Node>;
     fn terminate(&mut self);
     fn get_size(&self) -> usize;
     fn is_full(&self) -> bool;
@@ -96,6 +96,10 @@ impl Node for Node4 {
                 self.children[target_index].as_mut()
             }
         }
+    }
+
+    fn upgrade(&mut self) -> Box<dyn Node> {
+        Box::new(Node16::from(self))
     }
 
     fn terminate(&mut self) {
@@ -195,6 +199,10 @@ impl Node for Node16 {
         }
     }
 
+    fn upgrade(&mut self) -> Box<dyn Node> {
+        Box::new(Node48::from(self))
+    }
+
     fn terminate(&mut self) {
         self.terminal = true;
     }
@@ -261,6 +269,10 @@ impl Node for Node48 {
         }
     }
 
+    fn upgrade(&mut self) -> Box<dyn Node> {
+        Box::new(Node256::from(self))
+    }
+
     fn terminate(&mut self) {
         self.terminal = true;
     }
@@ -322,6 +334,10 @@ impl Node for Node256 {
                 self.children[cur_value_index].as_mut()
             }
         }
+    }
+
+    fn upgrade(&mut self) -> Box<dyn Node> {
+        unimplemented!()
     }
 
     fn terminate(&mut self) {
@@ -399,12 +415,24 @@ mod tests {
 
     #[test]
     fn testing_idea() {
-        let mut node = Box::new(Node4::new());
-        if let Some(n0) =  node.add(&0) {
-            if let Some(n1) = n0.add(&1) {
-                n1.add(&2);
-            }
+
+        let mut node :Box<dyn Node> = Box::new(Node4::new());
+
+        node.add(&0);
+        node.add(&1);
+        node.add(&2);
+        node.add(&3);
+        if matches!(node.add(&4), None) {
+            node = node.upgrade();
+            node.add(&4);
         }
+
+        //
+        // if let Some(n0) =  node.add(&0) {
+        //     if let Some(n1) = n0.add(&1) {
+        //         n1.add(&2);
+        //     }
+        // }
         println!("{:#?}", node);
     }
     //

@@ -5,6 +5,8 @@ use std::cmp::Ordering;
 use std::fmt::{Debug, Formatter};
 
 type Link = Option<Box<dyn Node>>;
+// type LinkMutRef = Option<&mut Box<dyn Node>>;
+
 
 pub trait Node : Debug{
     // fn add(&mut self, value: &[u8]) -> N {
@@ -16,7 +18,8 @@ pub trait Node : Debug{
     //         }
     //     }
     // }
-    fn add(&mut self, cur_value: &u8) -> (Link, &mut Link);
+    // fn upgrade
+    fn add(&mut self, cur_value: &u8) -> Option<&mut Box<dyn Node>>;
     fn terminate(&mut self);
     fn get_size(&self) -> usize;
     fn is_full(&self) -> bool;
@@ -71,34 +74,26 @@ impl Node4 {
 
 impl Node for Node4 {
     // adds a single value and returns the new current if its upgraded, and the node where the value was added
-    fn add(&mut self, cur_value: &u8) -> (Link, &mut Link) {
+    fn add(&mut self, cur_value: &u8) -> Option<&mut Box<dyn Node>> {
         //check if value exists already
         if let Some(index) = self
             .keys
             .iter()
             .position(|v| v.is_some() && v.unwrap() == *cur_value)
         {
-            (None, &mut self.children[index])
+            self.children[index].as_mut()
         } else {
             //value doesnt exist yet
             //expand to node16 and then add new value
             if self.is_full() {
-                //FIXME make this a single operation called upgrade_and_add, create and add can can become a single call
-                let mut new_node = Node16::from(self);
-                let next_node: &mut Link;
-                {
-                    let t = new_node.add(cur_value);
-                    next_node = t.1;
-                }
-                (Some(Box::new(new_node)), &mut next_node) //FIXME need to do upgrade outside of node, so implement find method and then if find == None and is_full == true then upgrade first
+                None
             } else {
                 //add value to existing Node4 if there is room
                 let target_index = self.size;
                 self.keys[target_index] = Some(*cur_value);
                 self.children[target_index] = Some(Box::new(Node4::new()));
-
                 self.size += 1;
-                (None, &mut self.children[target_index])
+                self.children[target_index].as_mut()
             }
         }
     }
@@ -134,30 +129,6 @@ impl Node16 {
             terminal: false,
         }
     }
-
-    // //sort the keys and original indices of the keys
-    // //the original indices will be used to create new arrays with the correct order
-    // pub fn from_alt(node: &mut Node4, cur_value :&u8) -> (Node16, &mut Box<dyn Node>) {
-    //     let mut new_node = Node16::new();
-    //     let mut ordered_index_value = node.keys.iter().enumerate().collect::<Vec<_>>();
-    //     ordered_index_value.sort_unstable_by(|(_, a), (_, b)| Node16::val_cmp(a, b));
-    //     //FIXME should be possible to do this without collecting into a vec
-    //     let ordered_index = ordered_index_value
-    //         .iter()
-    //         .map(|(index, _)| *index)
-    //         .collect::<Vec<_>>();
-    //     //order arrays based on the ordered indices
-    //     for (target_i, source_i) in ordered_index.iter().enumerate() {
-    //         new_node.keys[target_i] = node.keys[(*source_i)].take();
-    //         new_node.children[target_i] = node.children[*source_i].take();
-    //     }
-    //
-    //     new_node.terminal = node.terminal;
-    //     new_node.size = node.size;
-    //
-    //     let (_, Some(next_node)) = new_node.add();
-    //     (new_node, next_node)
-    // }
 
     //sort the keys and original indices of the keys
     //the original indices will be used to create new arrays with the correct order
@@ -195,7 +166,7 @@ impl Node16 {
 }
 
 impl Node for Node16 {
-    fn add(&mut self, cur_value: &u8) -> (Link, &mut Link) {
+    fn add(&mut self, cur_value: &u8) -> Option<&mut Box<dyn Node>> {
         //check if value exists already
         match self
             .keys
@@ -203,14 +174,12 @@ impl Node for Node16 {
         {
             Ok(index) => {
                 //FIXME can do None/Some check for extra error checking
-                (None, &mut self.children[index])
+                self.children[index].as_mut()
             }
             Err(index) => {
                 //expand to node48 and then add new value
                 if self.is_full() {
-                    let mut new_node = Node48::from(self);
-                    let (_, next_node) = new_node.add(cur_value);
-                    (Some(Box::new(new_node)), next_node)
+                    None
                 } else {
                     //add value in sorted order to existing Node16 if there is room
                     self.keys[index..].rotate_right(1); //shift right from index
@@ -220,7 +189,7 @@ impl Node for Node16 {
                     self.children[index] = Some(Box::new(Node4::new()));
 
                     self.size += 1;
-                    (None, &mut self.children[index])
+                    self.children[index].as_mut()
                 }
             }
         }
@@ -274,23 +243,21 @@ impl Node48 {
 }
 
 impl Node for Node48 {
-    fn add(&mut self, cur_value: &u8) -> (Link, &mut Link) {
+    fn add(&mut self, cur_value: &u8) -> Option<&mut Box<dyn Node>> {
         let cur_value_index = *cur_value as usize;
         //if exists
         if let Some(key) = self.keys[cur_value_index] {
             let key_index = key as usize;
-            (None, &mut self.children[key_index])
+            self.children[key_index].as_mut()
         } else if self.is_full() {
-            let mut new_node = Node256::from(self);
-            let (_, next_node) = new_node.add(cur_value);
-            (Some(Box::new(new_node)), next_node)
+            None
         } else {
             //add to self
             let target_index = self.size;
             self.keys[cur_value_index] = Some(self.size as u8);
             self.children[target_index] = Some(Box::new(Node4::new()));
             self.size += 1;
-            (None, &mut self.children[target_index])
+            self.children[target_index].as_mut()
         }
     }
 
@@ -342,17 +309,17 @@ impl Node256 {
 }
 
 impl Node for Node256 {
-    fn add(&mut self, cur_value: &u8) -> (Link, &mut Link) {
+    fn add(&mut self, cur_value: &u8) -> Option<&mut Box<dyn Node>> {
         let cur_value_index = *cur_value as usize;
         //if exists
         match self.children[cur_value_index] {
             None => {
                 self.children[cur_value_index] = Some(Box::new(Node4::new()));
                 self.size += 1;
-                (None, &mut self.children[cur_value_index])
+                self.children[cur_value_index].as_mut()
             }
             Some(_) => {
-                (None, &mut self.children[cur_value_index])
+                self.children[cur_value_index].as_mut()
             }
         }
     }
@@ -433,9 +400,8 @@ mod tests {
     #[test]
     fn testing_idea() {
         let mut node = Box::new(Node4::new());
-        let  (_, next) = node.add(&0);
-        if let Some(n0) = next {
-            if let (_, Some(n1))= n0.add(&1) {
+        if let Some(n0) =  node.add(&0) {
+            if let Some(n1) = n0.add(&1) {
                 n1.add(&2);
             }
         }

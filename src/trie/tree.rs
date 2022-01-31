@@ -1,5 +1,5 @@
 use crate::trie::enums::{Case, Match};
-use crate::trie::node::{Link, OldNode};
+use crate::trie::node::{OldLink, OldNode};
 use std::borrow::Borrow;
 
 pub struct Trie {

@@ -19,7 +19,7 @@ pub trait Node : Debug {
     //     }
     // }
     fn add(&mut self, cur_value: &u8) -> Option<&mut Box<dyn Node>>;
-    fn upgrade(&mut self) -> Box<dyn Node>;
+    fn upgrade(&mut self) -> Box<dyn Node>; //FIXME would be best if upgrade moved self look into using another trait see NodeUpgrade
     fn terminate(&mut self);
     fn get_size(&self) -> usize;
     fn get_capacity(&self) -> usize;
@@ -28,6 +28,10 @@ pub trait Node : Debug {
     fn is_terminal(&self) -> bool;
     fn as_any(&self) -> &dyn Any;
 }
+
+// pub trait NodeUpgrade {
+//     fn upgrade(self) -> Box<dyn Node>;
+// }
 
 #[derive(Debug)]
 pub struct Node4 {

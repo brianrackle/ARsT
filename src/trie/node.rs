@@ -8,7 +8,7 @@ type Link = Option<Box<dyn Node>>;
 // type LinkMutRef = Option<&mut Box<dyn Node>>;
 
 
-pub trait Node : Debug{
+pub trait Node : Debug {
     // fn add(&mut self, value: &[u8]) -> N {
     //     match value {
     //         [] => self.add_empty_case(),
@@ -26,6 +26,7 @@ pub trait Node : Debug{
     fn is_full(&self) -> bool;
     fn is_empty(&self) -> bool;
     fn is_terminal(&self) -> bool;
+    fn as_any(&self) -> &dyn Any;
 }
 
 #[derive(Debug)]
@@ -125,6 +126,10 @@ impl Node for Node4 {
 
     fn is_terminal(&self) -> bool {
         self.terminal
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 
@@ -231,6 +236,10 @@ impl Node for Node16 {
     fn is_terminal(&self) -> bool {
         self.terminal
     }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 impl Node48 {
@@ -258,6 +267,7 @@ impl Node48 {
         new_node
     }
 }
+
 
 impl Node for Node48 {
     fn add(&mut self, cur_value: &u8) -> Option<&mut Box<dyn Node>> {
@@ -304,6 +314,10 @@ impl Node for Node48 {
 
     fn is_terminal(&self) -> bool {
         self.terminal
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 
@@ -376,6 +390,10 @@ impl Node for Node256 {
     fn is_terminal(&self) -> bool {
         self.terminal
     }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 //Old implementation starts here
@@ -429,116 +447,101 @@ impl OldNode {
 mod tests {
     use super::*;
 
-
     #[test]
-    fn testing_idea() {
+    fn test_all_upgrades_occur_exact_match() {
         let mut node :Box<dyn Node> = Box::new(Node4::new());
-
-        node.add(&0);
-        node.add(&1);
-        node.add(&2);
-        node.add(&3);
-        if matches!(node.add(&4), None) {
-            node = node.upgrade();
-            node.add(&4);
+        for i in 0..=3 {
+            node.add(&i);
         }
 
-        //
-        // if let Some(n0) =  node.add(&0) {
-        //     if let Some(n1) = n0.add(&1) {
-        //         n1.add(&2);
-        //     }
-        // }
-        println!("{:#?}", node);
+        assert!(matches!(node.add(&4), None));
+        assert_eq!(node.get_capacity(), 4);
+        assert_eq!(node.get_size(), 4);
+        assert!(node.is_full());
+        assert!(!node.is_empty());
+
+        node = node.upgrade();
+        for i in 4..=15 {
+            node.add(&i);
+        }
+        assert!(matches!(node.add(&16), None));
+        assert_eq!(node.get_capacity(), 16);
+        assert_eq!(node.get_size(), 16);
+        assert!(node.is_full());
+        assert!(!node.is_empty());
+
+        node = node.upgrade();
+        for i in 16..=47 {
+            node.add(&i);
+        }
+        assert!(matches!(node.add(&48), None));
+        assert_eq!(node.get_capacity(), 48);
+        assert_eq!(node.get_size(), 48);
+        assert!(node.is_full());
+        assert!(!node.is_empty());
+
+        node = node.upgrade();
+        for i in 48..=255 {
+            node.add(&i);
+        }
+        assert_eq!(node.get_capacity(), 256);
+        assert_eq!(node.get_size(), 256);
+        assert!(node.is_full());
+        assert!(!node.is_empty());
     }
+
     //
-    // #[test]
-    // fn test_all_upgrades_occur_exact_match() {
-    //     let mut node = N::N0(Box::new(Node0::new()));
-    //     node = node.add(&[0]);
-    //     for i in 1..=3 {
-    //         node.add(&[i]);
-    //     }
-    //     assert!(matches!(node, N::N4(_)));
-    //     if let N::N4(n) = &node {
-    //         assert_eq!(n.size, 4);
-    //     }
-    //
-    //     node = node.add(&[4]);
-    //     for i in 5..=15 {
-    //         node.add(&[i]);
-    //     }
-    //     assert!(matches!(node, N::N16(_)));
-    //     if let N::N16(n) = &node {
-    //         assert_eq!(n.size, 16);
-    //     }
-    //
-    //     node = node.add(&[16]);
-    //     for i in 17..=47 {
-    //         node.add(&[i]);
-    //     }
-    //     assert!(matches!(node, N::N48(_)));
-    //     if let N::N48(n) = &node {
-    //         assert_eq!(n.size, 48);
-    //     }
-    //
-    //     node = node.add(&[48]);
-    //     for i in 49..=255 {
-    //         node.add(&[i]);
-    //     }
-    //     assert!(matches!(node, N::N256(_)));
-    //     if let N::N256(n) = &node {
-    //         assert_eq!(n.size, 256);
-    //     }
-    // }
-    //
-    // #[test]
-    // fn order_preserved_48_exact_match() {
-    //     let mut node = N::N0(Box::new(Node0::new()));
-    //
-    //     for i in 0..=96 {
-    //         if i % 2 == 0 {
-    //             node = node.add(&[i]);
-    //         }
-    //     }
-    //
-    //     if let N::N48(n) = node {
-    //         for (i, &k) in n.keys.iter().enumerate() {
-    //             if i < 96 { //only first entries 48 considered
-    //                 match k {
-    //                     None => {
-    //                         assert_ne!(i % 2, 0);
-    //                     },
-    //                     Some(c) => {
-    //                         assert_eq!(i % 2, 0);
-    //                         assert!(matches!(&n.children[c as usize], N::N0(_)));
-    //                     },
-    //                     _ => panic!()
-    //                 }
-    //             }
-    //         }
-    //     }
-    // }
-    //
-    // #[test]
-    // fn order_preserved_256_exact_match() {
-    //     let mut node = N::N0(Box::new(Node0::new()));
-    //
-    //     for i in 0..=255 {
-    //         if i % 2 == 0 {
-    //             node = node.add(&[i]);
-    //         }
-    //     }
-    //
-    //     if let N::N256(n) = node {
-    //         for (i, c) in n.children.iter().enumerate() {
-    //             match &c {
-    //                 N::Empty => assert_ne!(i % 2, 0),
-    //                 N::N0(_) => assert_eq!(i % 2, 0),
-    //                 _ => panic!()
-    //             }
-    //         }
-    //
-    //     }
-    // }
+    #[test]
+    fn order_preserved_48_exact_match() {
+        let mut node: Box<dyn Node> = Box::new(Node4::new());
+
+        for i in 0..48 {
+            if node.is_full() {
+                node = node.upgrade();
+            }
+            assert!(matches!(node.add(&(i * 2)), Some(_)));
+        }
+
+        assert_eq!(node.get_size(), 48);
+        let node48 = Box::new(node.as_any().downcast_ref::<Node48>().unwrap());
+
+        for (i, &k) in node48.keys.iter().enumerate() {
+            if i < 96 { //only first entries 48 considered
+                match k {
+                    None => {
+                        assert_ne!(i % 2, 0);
+                    },
+                    Some(c) => {
+                        assert_eq!(i % 2, 0);
+                        assert!(matches!(&node48.children[c as usize], Some(_)));
+                    },
+                    _ => panic!()
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn order_preserved_256_exact_match() {
+        let mut node : Box<dyn Node> = Box::new(Node4::new());
+
+        for i in 0..=255 {
+            if i % 2 == 0 {
+                if node.is_full() {
+                    node = node.upgrade();
+                }
+                assert!(matches!(node.add(&i), Some(_)));
+            }
+        }
+
+        assert_eq!(node.get_size(), 128);
+        let node256 = Box::new(node.as_any().downcast_ref::<Node256>().unwrap());
+
+        for (i, c) in node256.children.iter().enumerate() {
+            match &c {
+                None => assert_ne!(i % 2, 0),
+                Some(n) => assert_eq!(i % 2, 0),
+            }
+        }
+    }
 }

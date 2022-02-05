@@ -12,11 +12,6 @@ pub trait Node: Sized {
 }
 
 #[derive(Debug)]
-pub struct Node0 {
-    terminal: bool,
-}
-
-#[derive(Debug)]
 pub struct Node4 {
     keys: [Option<u8>; 4], //Can remove this option and rely only on children option
     children: [N; 4],

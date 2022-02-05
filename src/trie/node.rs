@@ -1,3 +1,4 @@
+use std::any::Any;
 use crate::trie::enums::Match;
 use crate::trie::node::N::{Empty};
 use arr_macro::arr;
@@ -5,16 +6,18 @@ use std::cmp::Ordering;
 use std::fmt::Debug;
 use std::mem;
 
-pub trait Node : Debug{
+pub trait Node : Debug {
     fn add(&mut self, values: &[u8], match_type: &Match) -> N;
     fn is_full(&self) -> bool;
     fn is_empty(&self) -> bool;
     fn is_terminal(&self) -> bool;
+    fn as_any(&self) -> &dyn Any;
 }
 
+//TODO performance and memory test storing children directly in keys
 #[derive(Debug)]
 pub struct Node4 {
-    keys: [Option<u8>; 4], //Can remove this option and rely only on children option
+    keys: [Option<u8>; 4], //FIXME: Can remove this option and rely only on children option
     children: [N; 4],
     size: usize,
     terminal: bool,
@@ -124,6 +127,10 @@ impl Node for Node4 {
     fn is_terminal(&self) -> bool {
         self.terminal
     }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 impl Default for Node16 {
@@ -230,6 +237,10 @@ impl Node for Node16 {
     fn is_terminal(&self) -> bool {
         self.terminal
     }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 impl Default for Node48 {
@@ -306,6 +317,10 @@ impl Node for Node48 {
     fn is_terminal(&self) -> bool {
         self.terminal
     }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 impl Default for Node256 {
@@ -373,6 +388,10 @@ impl Node for Node256 {
 
     fn is_terminal(&self) -> bool {
         self.terminal
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 
@@ -497,55 +516,63 @@ mod tests {
         if let N::Nx(n) = &node {
             assert!(n.is_full());
         }
-        println!("{:#?}", node);
+        // println!("{:#?}", node);
     }
-    //
-    // #[test]
-    // fn order_preserved_48_exact_match() {
-    //     let mut node = N::N4(Box::new(Node4::new()));
-    //
-    //     for i in 0..=96 {
-    //         if i % 2 == 0 {
-    //             node = node.add(&[i], &Match::Exact);
-    //         }
-    //     }
-    //
-    //     if let N::Nx(n) = node {
-    //         for (i, &k) in n.keys.iter().enumerate() {
-    //             if i < 96 { //only first entries 48 considered
-    //                 match k {
-    //                     None => {
-    //                         assert_ne!(i % 2, 0);
-    //                     },
-    //                     Some(c) => {
-    //                         assert_eq!(i % 2, 0);
-    //                         assert!(matches!(&n.children[c as usize], N::Nx(_)));
-    //                     },
-    //                     _ => panic!()
-    //                 }
-    //             }
-    //         }
-    //     }
-    // }
-    //
-    // #[test]
-    // fn order_preserved_256_exact_match() {
-    //     let mut node = N::Nx(Box::new(Node4::new()));
-    //
-    //     for i in 0..=255 {
-    //         if i % 2 == 0 {
-    //             node = node.add(&[i], &Match::Exact);
-    //         }
-    //     }
-    //     println!("{:#?}",node);
-    //     if let N::Nx(n) = node {
-    //         for (i, c) in n.children.iter().enumerate() {
-    //             match &c {
-    //                 N::Empty => assert_ne!(i % 2, 0),
-    //                 N::Nx(_) => assert_eq!(i % 2, 0),
-    //                 _ => panic!()
-    //             }
-    //         }
-    //     }
-    // }
+
+    #[test]
+    fn order_preserved_48_exact_match() {
+        let mut node = N::Nx(Box::new(Node4::new()));
+
+        for i in 0..48 {
+            let upgrade =  node.add(&[i * 2], &Match::Exact);
+            if let N::Nx(_) = upgrade {
+                node = upgrade;
+            }
+        }
+
+        if let N::Nx(n) = node {
+            let node48 = n.as_any().downcast_ref::<Node48>().unwrap();
+            for (i, &k) in node48.keys.iter().enumerate() {
+                if i < 96 { //only first entries 48 considered
+                    match k {
+                        None => {
+                            assert_ne!(i % 2, 0);
+                        },
+                        Some(c) => {
+                            assert_eq!(i % 2, 0);
+                            assert!(matches!(&node48.children[c as usize], N::Nx(_)));
+                        },
+                        _ => panic!()
+                    }
+                }
+            }
+        } else {
+            panic!()
+        }
+    }
+
+    #[test]
+    fn order_preserved_256_exact_match() {
+        let mut node = N::Nx(Box::new(Node4::new()));
+
+        for i in 0..=255 {
+            if i % 2 == 0 {
+                let upgrade = node.add(&[i], &Match::Exact);
+                if let N::Nx(_) = upgrade {
+                    node = upgrade;
+                }
+            }
+        }
+
+        if let N::Nx(n) = node {
+            let node256 = n.as_any().downcast_ref::<Node256>().unwrap();
+            for (i, c) in node256.children.iter().enumerate() {
+                match &c {
+                    N::Empty => assert_ne!(i % 2, 0),
+                    N::Nx(_) => assert_eq!(i % 2, 0),
+                    _ => panic!()
+                }
+            }
+        }
+    }
 }

@@ -95,11 +95,15 @@ impl Node for Node4 {
                 N::Empty
             } else if self.is_full() { //value doesnt exist yet
                 //expand to node16 and then add new value
-                Node16::from(self).add(values, match_type)
+                let mut upgraded_node = Node16::from(self);
+                upgraded_node.add(values, match_type);
+                N::Nx(Box::new(upgraded_node))
             } else {
                 //add value to existing Node4 if there is room
                 self.keys[self.size] = Some(*first);
-                self.children[self.size] = Node4::new().add(rest, match_type);
+                let mut new_node = N::Nx(Box::new(Node4::new()));
+                new_node.add(rest, match_type);
+                self.children[self.size] = new_node;
                 self.size += 1;
                 N::Empty
             }
@@ -191,14 +195,18 @@ impl Node for Node16 {
                 Err(index) => {
                     //expand to node48 and then add new value
                     if self.is_full() {
-                        Node48::from(self).add(values, match_type)
+                        let mut upgraded_node = Node48::from(self);
+                        upgraded_node.add(values, match_type);
+                        N::Nx(Box::new(upgraded_node))
                     } else {
                         //add value in sorted order to existing Node16 if there is room
                         self.keys[index..].rotate_right(1); //shift right from index
                         self.keys[index] = Some(*first);
 
                         self.children[index..].rotate_right(1);
-                        self.children[index] = Node4::new().add(rest, match_type);
+                        let mut new_node = N::Nx(Box::new(Node4::new()));
+                        new_node.add(rest, match_type);
+                        self.children[index] = new_node;
 
                         self.size += 1;
                         N::Empty
@@ -269,11 +277,15 @@ impl Node for Node48 {
                 }
                 N::Empty
             } else if self.is_full() {
-                Node256::from(self).add(values, match_type) //FIXME need to return upgraded node, not the result of add
+                let mut upgraded_node = Node256::from(self);
+                upgraded_node.add(values, match_type);
+                N::Nx(Box::new(upgraded_node))
             } else {
                 //add to self
                 self.keys[cur_value_index] = Some(self.size as u8);
-                self.children[self.size] = Node4::new().add(rest, match_type);
+                let mut new_node = N::Nx(Box::new(Node4::new()));
+                new_node.add(rest, match_type);
+                self.children[self.size] = new_node;
                 self.size += 1;
                 N::Empty
             }
@@ -339,7 +351,9 @@ impl Node for Node256 {
                     }
                     N::Empty
             } else {
-                self.children[cur_value_index] = Node4::new().add(rest, match_type);
+                let mut new_node = N::Nx(Box::new(Node4::new()));
+                new_node.add(rest, match_type);
+                self.children[cur_value_index] = new_node;
                 self.size += 1;
                 N::Empty
             }
@@ -445,33 +459,45 @@ mod tests {
     fn test_all_upgrades_occur_exact_match() {
         let mut node = N::Nx(Box::new(Node4::new()));
         for i in 0..=3 {
-            node = node.add(&[i], &Match::Exact);
+            let upgrade = node.add(&[i], &Match::Exact);
+            if let N::Nx(_) = upgrade {
+                node = upgrade;
+            }
         }
         if let N::Nx(n) = &node {
             assert!(n.is_full());
         }
 
         for i in 4..=15 {
-            node = node.add(&[i], &Match::Exact);
+            let upgrade = node.add(&[i], &Match::Exact);
+            if let N::Nx(_) = upgrade {
+                node = upgrade;
+            }
         }
         if let N::Nx(n) = &node {
             assert!(n.is_full());
         }
 
         for i in 16..=47 {
-            node = node.add(&[i], &Match::Exact);
+            let upgrade = node.add(&[i], &Match::Exact);
+            if let N::Nx(_) = upgrade {
+                node = upgrade;
+            }
         }
         if let N::Nx(n) = &node {
             assert!(n.is_full());
         }
 
         for i in 48..=255 {
-            node = node.add(&[i], &Match::Exact);
+            let upgrade = node.add(&[i], &Match::Exact);
+            if let N::Nx(_) = upgrade {
+                node = upgrade;
+            }
         }
         if let N::Nx(n) = &node {
             assert!(n.is_full());
         }
-
+        println!("{:#?}", node);
     }
     //
     // #[test]

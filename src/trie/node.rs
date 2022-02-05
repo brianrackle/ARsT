@@ -88,8 +88,11 @@ impl Node for Node4 {
             //check if value exists already
             if let Some(index) = self.keys.iter().position(|v| v.is_some() && v.unwrap() == *first)
             {
-                self.children[index] = self.children[index].take().add(rest, match_type);
-                N::Nx(Box::new(std::mem::take(self))) //FIXME return NONE if no upgrade occurs
+                let upgraded_node = self.children[index].add(rest, match_type);
+                if let N::Nx(_) = upgraded_node {
+                    self.children[index] = upgraded_node;
+                }
+                N::Empty
             } else if self.is_full() { //value doesnt exist yet
                 //expand to node16 and then add new value
                 Node16::from(self).add(values, match_type)
@@ -97,13 +100,12 @@ impl Node for Node4 {
                 //add value to existing Node4 if there is room
                 self.keys[self.size] = Some(*first);
                 self.children[self.size] = Node4::new().add(rest, match_type);
-
                 self.size += 1;
-                N::Nx(Box::new(std::mem::take(self)))
+                N::Empty
             }
         } else {
             self.terminal = true;
-            N::Nx(Box::new(std::mem::take(self)))
+            N::Empty
         }
     }
 
@@ -180,11 +182,11 @@ impl Node for Node16 {
                 .binary_search_by(|probe| Node16::val_cmp(probe, &Some(*first)))
             {
                 Ok(index) => {
-                    self.children[index] = self.children[index]
-                        .take()
-                        .add(rest, match_type);
-
-                    N::Nx(Box::new(std::mem::take(self)))
+                    let upgraded_node = self.children[index].add(rest, match_type);
+                    if let N::Nx(_) = upgraded_node {
+                        self.children[index] = upgraded_node;
+                    }
+                    N::Empty
                 }
                 Err(index) => {
                     //expand to node48 and then add new value
@@ -199,13 +201,13 @@ impl Node for Node16 {
                         self.children[index] = Node4::new().add(rest, match_type);
 
                         self.size += 1;
-                        N::Nx(Box::new(std::mem::take(self)))
+                        N::Empty
                     }
                 }
             }
         } else {
             self.terminal = true;
-            N::Nx(Box::new(std::mem::take(self)))
+            N::Empty
         }
     }
 
@@ -261,20 +263,23 @@ impl Node for Node48 {
             //if exists
             if let Some(key) = self.keys[cur_value_index] {
                 let key_index = key as usize;
-                self.children[key_index] = self.children[key_index].take().add(rest, match_type);
-                N::Nx(Box::new(std::mem::take(self)))
+                let upgraded_node =self.children[key_index].add(rest, match_type);
+                if let N::Nx(_) = upgraded_node {
+                    self.children[key_index] = upgraded_node;
+                }
+                N::Empty
             } else if self.is_full() {
-                Node256::from(self).add(values, match_type)
+                Node256::from(self).add(values, match_type) //FIXME need to return upgraded node, not the result of add
             } else {
                 //add to self
                 self.keys[cur_value_index] = Some(self.size as u8);
                 self.children[self.size] = Node4::new().add(rest, match_type);
                 self.size += 1;
-                N::Nx(Box::new(std::mem::take(self)))
+                N::Empty
             }
         } else {
             self.terminal = true;
-            N::Nx(Box::new(std::mem::take(self)))
+            N::Empty
         }
     }
 
@@ -327,21 +332,20 @@ impl Node for Node256 {
         if let Some((first, rest)) = values.split_first() {
             let cur_value_index = *first as usize;
             //if exists
-            match &mut self.children[cur_value_index].take() {
-                N::Empty => {
-                    self.children[cur_value_index] = Node4::new().add(rest, match_type);
-                    self.size += 1;
-                    N::Nx(Box::new(std::mem::take(self)))
-                }
-                node => {
-                    self.children[cur_value_index] = node.add(rest, match_type);
-                    self.size += 1;
-                    N::Nx(Box::new(std::mem::take(self)))
-                }
+            if let N::Nx(_) = &mut self.children[cur_value_index] {
+                    let upgraded_node = self.children[cur_value_index].add(rest, match_type);
+                    if let N::Nx(_) = upgraded_node {
+                        self.children[cur_value_index] = upgraded_node;
+                    }
+                    N::Empty
+            } else {
+                self.children[cur_value_index] = Node4::new().add(rest, match_type);
+                self.size += 1;
+                N::Empty
             }
         } else {
             self.terminal = true;
-            N::Nx(Box::new(std::mem::take(self)))
+            N::Empty
         }
     }
 

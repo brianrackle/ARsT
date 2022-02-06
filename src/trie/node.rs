@@ -1,5 +1,4 @@
 use std::any::Any;
-use crate::trie::node::NodeOption::{Empty};
 use arr_macro::arr;
 use std::cmp::Ordering;
 use std::fmt::Debug;
@@ -12,6 +11,13 @@ pub trait Node : Debug {
     fn is_empty(&self) -> bool;
     fn is_terminal(&self) -> bool;
     fn as_any(&self) -> &dyn Any;
+}
+
+pub fn add(node: &mut NodeOption, value: &[u8]) -> NodeOption {
+    match node {
+        None => Node0::new().add(value),
+        Some(n) => n.add(value)
+    }
 }
 
 //TODO performance and memory test storing children directly in keys
@@ -54,11 +60,7 @@ pub struct Node256 {
 }
 
 //see: https://www.the-paper-trail.org/post/art-paper-notes/
-#[derive(Debug)]
-pub enum NodeOption {
-    Empty,
-    Nx(Box<dyn Node>)
-}
+pub type NodeOption = Option<Box<dyn Node>>;
 
 impl Node0 {
     pub fn new() -> Self {
@@ -78,7 +80,7 @@ impl Node for Node0 {
     fn add(&mut self, values: &[u8]) -> NodeOption {
         let mut new_node = Node4::from(self);
         new_node.add(values);
-        NodeOption::Nx(Box::new(new_node))
+        Some(Box::new(new_node))
     }
 
     fn is_full(&self) -> bool {
@@ -102,7 +104,7 @@ impl Node4 {
     pub fn new() -> Self {
         Node4 {
             keys: [None; 4],
-            children: arr![NodeOption::Empty; 4],
+            children: arr![None; 4],
             size: 0,
             terminal: false,
         }
@@ -127,28 +129,28 @@ impl Node for Node4 {
             //check if value exists already
             if let Some(index) = self.keys.iter().position(|v| v.is_some() && v.unwrap() == *first)
             {
-                //FIXME reintroduce N0, make that default, add to it to trigger an upgrade to accomplish and Node enum add wont be needed
-                //let upgraded_node = self.children[index].unwrap_or_default().add(rest);
-                let upgraded_node = self.children[index].add(rest);
-                if upgraded_node.is_node() {
+                //FIXME replace this pattern with single implementation
+                // set_if_some
+                let upgraded_node = add(&mut self.children[index], rest);
+                if upgraded_node.is_some() {
                     self.children[index] = upgraded_node;
                 }
-                NodeOption::Empty
+                None
             } else if self.is_full() { //value doesnt exist yet
                 //expand to node16 and then add new value
                 let mut upgraded_node = Node16::from(self);
                 upgraded_node.add(values);
-                NodeOption::Nx(Box::new(upgraded_node))
+                Some(Box::new(upgraded_node))
             } else {
                 //add value to existing Node4 if there is room
                 self.keys[self.size] = Some(*first);
                 self.children[self.size] = Node0::new().add(rest);
                 self.size += 1;
-                NodeOption::Empty
+                None
             }
         } else {
             self.terminal = true;
-            NodeOption::Empty
+            None
         }
     }
 
@@ -180,7 +182,7 @@ impl Node16 {
     pub fn new() -> Self {
         Node16 {
             keys: [None; 16],
-            children: arr![NodeOption::Empty; 16],
+            children: arr![None; 16],
             size: 0,
             terminal: false,
         }
@@ -229,18 +231,18 @@ impl Node for Node16 {
                 .binary_search_by(|probe| Node16::val_cmp(probe, &Some(*first)))
             {
                 Ok(index) => {
-                    let upgraded_node = self.children[index].add(rest);
-                    if upgraded_node.is_node() {
+                    let upgraded_node = add(&mut self.children[index],rest);
+                    if upgraded_node.is_some() {
                         self.children[index] = upgraded_node;
                     }
-                    NodeOption::Empty
+                    None
                 }
                 Err(index) => {
                     //expand to node48 and then add new value
                     if self.is_full() {
                         let mut upgraded_node = Node48::from(self);
                         upgraded_node.add(values);
-                        NodeOption::Nx(Box::new(upgraded_node))
+                        Some(Box::new(upgraded_node))
                     } else {
                         //add value in sorted order to existing Node16 if there is room
                         self.keys[index..].rotate_right(1); //shift right from index
@@ -250,13 +252,13 @@ impl Node for Node16 {
                         self.children[index] = Node0::new().add(rest);
 
                         self.size += 1;
-                        NodeOption::Empty
+                        None
                     }
                 }
             }
         } else {
             self.terminal = true;
-            NodeOption::Empty
+            None
         }
     }
 
@@ -287,7 +289,7 @@ impl Node48 {
     pub fn new() -> Self {
         Node48 {
             keys: [None; 256],
-            children: arr![NodeOption::Empty; 48],
+            children: arr![None; 48],
             size: 0,
             terminal: false,
         }
@@ -316,25 +318,25 @@ impl Node for Node48 {
             //if exists
             if let Some(key) = self.keys[cur_value_index] {
                 let key_index = key as usize;
-                let upgraded_node =self.children[key_index].add(rest);
-                if upgraded_node.is_node() {
+                let upgraded_node = add(&mut self.children[key_index], rest);
+                if upgraded_node.is_some() {
                     self.children[key_index] = upgraded_node;
                 }
-                NodeOption::Empty
+                None
             } else if self.is_full() {
                 let mut upgraded_node = Node256::from(self);
                 upgraded_node.add(values);
-                NodeOption::Nx(Box::new(upgraded_node))
+                Some(Box::new(upgraded_node))
             } else {
                 //add to self
                 self.keys[cur_value_index] = Some(self.size as u8);
                 self.children[self.size] = Node0::new().add(rest);
                 self.size += 1;
-                NodeOption::Empty
+                None
             }
         } else {
             self.terminal = true;
-            NodeOption::Empty
+            None
         }
     }
 
@@ -364,7 +366,7 @@ impl Default for Node256 {
 impl Node256 {
     pub fn new() -> Self {
         Node256 {
-            children: arr![NodeOption::Empty; 256],
+            children: arr![None; 256],
             size: 0,
             terminal: false,
         }
@@ -391,20 +393,20 @@ impl Node for Node256 {
         if let Some((first, rest)) = values.split_first() {
             let cur_value_index = *first as usize;
             //if exists
-            if let NodeOption::Nx(_) = &mut self.children[cur_value_index] {
-                    let upgraded_node = self.children[cur_value_index].add(rest);
-                    if upgraded_node.is_node() {
+            if let Some(_) = &mut self.children[cur_value_index] {
+                    let upgraded_node = add(&mut self.children[cur_value_index], rest);
+                    if upgraded_node.is_some() {
                         self.children[cur_value_index] = upgraded_node;
                     }
-                    NodeOption::Empty
+                    None
             } else {
                 self.children[cur_value_index] =  Node0::new().add(rest);
                 self.size += 1;
-                NodeOption::Empty
+                None
             }
         } else {
             self.terminal = true;
-            NodeOption::Empty
+            None
         }
     }
 
@@ -422,47 +424,6 @@ impl Node for Node256 {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }
-}
-
-impl Default for NodeOption {
-    fn default() -> Self {
-        NodeOption::Nx(Box::new(Node0::new()))
-    }
-}
-
-impl NodeOption {
-    pub fn take(&mut self) -> NodeOption {
-        mem::replace(self, Empty)
-    }
-
-    pub fn add(&mut self, value: &[u8]) -> Self {
-        match self {
-            NodeOption::Empty => Node4::new().add(value),
-            NodeOption::Nx(n) => n.add(value)
-        }
-    }
-
-    pub fn is_empty(&self) -> bool {
-        matches!(self, NodeOption::Empty)
-    }
-
-    pub fn is_node(&self) -> bool {
-        matches!(self, NodeOption::Nx(_))
-    }
-
-    pub fn unwrap(self) -> Box<dyn Node> {
-        match self {
-            NodeOption::Nx(val) => val,
-            NodeOption::Empty => panic!("called `NodeOption::unwrap()` on an `Empty` value"),
-        }
-    }
-
-    pub fn unwrap_or_default(self) -> Box<dyn Node> {
-        match self {
-            NodeOption::Nx(val) => val,
-            NodeOption::Empty => Box::new(Node0::new()) //FIXME create default for Node trait
-        }
     }
 }
 
@@ -490,44 +451,44 @@ mod tests {
 
     #[test]
     fn test_all_upgrades_occur_exact_match() {
-        let mut node = NodeOption::Nx(Box::new(Node4::new()));
+        let mut node = NodeOption::Some(Box::new(Node4::new()));
         for i in 0..=3 {
-            let upgrade = node.add(&[i]);
-            if let NodeOption::Nx(_) = upgrade {
+            let upgrade = node.as_mut().unwrap().add(&[i]);
+            if upgrade.is_some() {
                 node = upgrade;
             }
         }
-        if let NodeOption::Nx(n) = &node {
+        if let Some(n) = &node {
             assert!(n.is_full());
         }
 
         for i in 4..=15 {
-            let upgrade = node.add(&[i]);
-            if let NodeOption::Nx(_) = upgrade {
+            let upgrade = node.as_mut().unwrap().add(&[i]);
+            if upgrade.is_some() {
                 node = upgrade;
             }
         }
-        if let NodeOption::Nx(n) = &node {
+        if let Some(n) = &node {
             assert!(n.is_full());
         }
 
         for i in 16..=47 {
-            let upgrade = node.add(&[i]);
-            if let NodeOption::Nx(_) = upgrade {
+            let upgrade = node.as_mut().unwrap().add(&[i]);
+            if upgrade.is_some() {
                 node = upgrade;
             }
         }
-        if let NodeOption::Nx(n) = &node {
+        if let Some(n) = &node {
             assert!(n.is_full());
         }
 
         for i in 48..=255 {
-            let upgrade = node.add(&[i]);
-            if let NodeOption::Nx(_) = upgrade {
+            let upgrade = node.as_mut().unwrap().add(&[i]);
+            if upgrade.is_some() {
                 node = upgrade;
             }
         }
-        if let NodeOption::Nx(n) = &node {
+        if let Some(n) = &node {
             assert!(n.is_full());
         }
         // println!("{:#?}", node);
@@ -535,16 +496,16 @@ mod tests {
 
     #[test]
     fn order_preserved_48_exact_match() {
-        let mut node = NodeOption::Nx(Box::new(Node4::new()));
+        let mut node = NodeOption::Some(Box::new(Node4::new()));
 
         for i in 0..48 {
-            let upgrade =  node.add(&[i * 2]);
-            if let NodeOption::Nx(_) = upgrade {
+            let upgrade =  node.as_mut().unwrap().add(&[i * 2]);
+            if upgrade.is_some() {
                 node = upgrade;
             }
         }
 
-        if let NodeOption::Nx(n) = node {
+        if let Some(n) = node {
             let node48 = n.as_any().downcast_ref::<Node48>().unwrap();
             for (i, &k) in node48.keys.iter().enumerate() {
                 if i < 96 { //only first entries 48 considered
@@ -554,7 +515,7 @@ mod tests {
                         },
                         Some(c) => {
                             assert_eq!(i % 2, 0);
-                            assert!(matches!(&node48.children[c as usize], NodeOption::Nx(_)));
+                            assert!(matches!(&node48.children[c as usize], Some(_)));
                         },
                         _ => panic!()
                     }
@@ -567,23 +528,23 @@ mod tests {
 
     #[test]
     fn order_preserved_256_exact_match() {
-        let mut node = NodeOption::Nx(Box::new(Node4::new()));
+        let mut node = NodeOption::Some(Box::new(Node4::new()));
 
         for i in 0..=255 {
             if i % 2 == 0 {
-                let upgrade = node.add(&[i]);
-                if let NodeOption::Nx(_) = upgrade {
+                let upgrade = node.as_mut().unwrap().add(&[i]);
+                if upgrade.is_some() {
                     node = upgrade;
                 }
             }
         }
 
-        if let NodeOption::Nx(n) = node {
+        if let Some(n) = node {
             let node256 = n.as_any().downcast_ref::<Node256>().unwrap();
             for (i, c) in node256.children.iter().enumerate() {
                 match &c {
-                    NodeOption::Empty => assert_ne!(i % 2, 0),
-                    NodeOption::Nx(_) => assert_eq!(i % 2, 0),
+                    None => assert_ne!(i % 2, 0),
+                    Some(_) => assert_eq!(i % 2, 0),
                     _ => panic!()
                 }
             }

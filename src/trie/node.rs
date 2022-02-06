@@ -68,6 +68,12 @@ impl Node0 {
     }
 }
 
+impl Default for Node0 {
+    fn default() -> Self {
+        Node0::new()
+    }
+}
+
 impl Node for Node0 {
     fn add(&mut self, values: &[u8]) -> NodeOption {
         let mut new_node = Node4::from(self);
@@ -455,7 +461,7 @@ impl NodeOption {
     pub fn unwrap_or_default(self) -> Box<dyn Node> {
         match self {
             NodeOption::Nx(val) => val,
-            NodeOption::Empty => Box::new(Node4::new()) //FIXME create default for Node trait
+            NodeOption::Empty => Box::new(Node0::new()) //FIXME create default for Node trait
         }
     }
 }

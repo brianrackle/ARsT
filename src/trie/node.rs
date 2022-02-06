@@ -123,9 +123,10 @@ impl Node for Node4 {
             //check if value exists already
             if let Some(index) = self.keys.iter().position(|v| v.is_some() && v.unwrap() == *first)
             {
+                //if None create Node0 and add rest, if Some add content
                 let upgraded_node  = self.children[index]
                     .as_mut()
-                    .map_or_else(|| Box::new(Node0::new()).add(rest),
+                    .map_or_else(| | Box::new(Node0::new()).add(rest),
                                  |v| v.add(rest));
                 if upgraded_node.is_some() {
                     self.children[index] = upgraded_node;
@@ -229,7 +230,7 @@ impl Node for Node16 {
 
                     let upgraded_node = self.children[index]
                         .as_mut()
-                        .map_or_else(|| Box::new(Node0::new()).add(rest),
+                        .map_or_else(| | Box::new(Node0::new()).add(rest),
                                      |v| v.add(rest));;
                     if upgraded_node.is_some() {
                         self.children[index] = upgraded_node;
@@ -320,7 +321,7 @@ impl Node for Node48 {
                 // self.children[key_index].a
                 let upgraded_node =  self.children[key_index]
                     .as_mut()
-                    .map_or_else(|| Box::new(Node0::new()).add(rest),
+                    .map_or_else(| | Box::new(Node0::new()).add(rest),
                                  |v| v.add(rest));
                 if upgraded_node.is_some() {
                     self.children[key_index] = upgraded_node;
@@ -396,10 +397,10 @@ impl Node for Node256 {
         if let Some((first, rest)) = values.split_first() {
             let cur_value_index = *first as usize;
             //if exists
-            if let Some(_) = &mut self.children[cur_value_index] {
+            if self.children[cur_value_index].is_some() {
                     let upgraded_node = self.children[cur_value_index]
                         .as_mut()
-                        .map_or_else(|| Box::new(Node0::new()).add(rest),
+                        .map_or_else(| | Box::new(Node0::new()).add(rest),
                                      |v| v.add(rest));
                     if upgraded_node.is_some() {
                         self.children[cur_value_index] = upgraded_node;

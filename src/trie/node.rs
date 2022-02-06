@@ -1,4 +1,5 @@
 use std::any::Any;
+use std::borrow::BorrowMut;
 use arr_macro::arr;
 use std::cmp::Ordering;
 use std::fmt::Debug;
@@ -11,13 +12,6 @@ pub trait Node : Debug {
     fn is_empty(&self) -> bool;
     fn is_terminal(&self) -> bool;
     fn as_any(&self) -> &dyn Any;
-}
-
-pub fn add(node: &mut NodeOption, value: &[u8]) -> NodeOption {
-    match node {
-        None => Node0::new().add(value),
-        Some(n) => n.add(value)
-    }
 }
 
 //TODO performance and memory test storing children directly in keys
@@ -129,9 +123,10 @@ impl Node for Node4 {
             //check if value exists already
             if let Some(index) = self.keys.iter().position(|v| v.is_some() && v.unwrap() == *first)
             {
-                //FIXME replace this pattern with single implementation
-                // set_if_some
-                let upgraded_node = add(&mut self.children[index], rest);
+                let upgraded_node  = self.children[index]
+                    .as_mut()
+                    .map_or_else(|| Box::new(Node0::new()).add(rest),
+                                 |v| v.add(rest));
                 if upgraded_node.is_some() {
                     self.children[index] = upgraded_node;
                 }
@@ -231,7 +226,11 @@ impl Node for Node16 {
                 .binary_search_by(|probe| Node16::val_cmp(probe, &Some(*first)))
             {
                 Ok(index) => {
-                    let upgraded_node = add(&mut self.children[index],rest);
+
+                    let upgraded_node = self.children[index]
+                        .as_mut()
+                        .map_or_else(|| Box::new(Node0::new()).add(rest),
+                                     |v| v.add(rest));;
                     if upgraded_node.is_some() {
                         self.children[index] = upgraded_node;
                     }
@@ -318,7 +317,11 @@ impl Node for Node48 {
             //if exists
             if let Some(key) = self.keys[cur_value_index] {
                 let key_index = key as usize;
-                let upgraded_node = add(&mut self.children[key_index], rest);
+                // self.children[key_index].a
+                let upgraded_node =  self.children[key_index]
+                    .as_mut()
+                    .map_or_else(|| Box::new(Node0::new()).add(rest),
+                                 |v| v.add(rest));
                 if upgraded_node.is_some() {
                     self.children[key_index] = upgraded_node;
                 }
@@ -394,7 +397,10 @@ impl Node for Node256 {
             let cur_value_index = *first as usize;
             //if exists
             if let Some(_) = &mut self.children[cur_value_index] {
-                    let upgraded_node = add(&mut self.children[cur_value_index], rest);
+                    let upgraded_node = self.children[cur_value_index]
+                        .as_mut()
+                        .map_or_else(|| Box::new(Node0::new()).add(rest),
+                                     |v| v.add(rest));
                     if upgraded_node.is_some() {
                         self.children[cur_value_index] = upgraded_node;
                     }
@@ -448,6 +454,20 @@ mod tests {
     //     }
     //     // println!("root: {:#?}",node);
     // }
+    #[test]
+    fn test_adding_words_to_node4() {
+        let mut node = NodeOption::Some(Box::new(Node4::new()));
+        for i in 0..=3 {
+            let upgrade = node.as_mut().unwrap().add(&[0, i]);
+            if upgrade.is_some() {
+                node = upgrade;
+            }
+        }
+        if let Some(root) = node {
+            let child = root.as_any().downcast_ref::<Node4>().unwrap().children[0].as_ref().unwrap();
+            assert!(child.is_full());
+        }
+    }
 
     #[test]
     fn test_all_upgrades_occur_exact_match() {

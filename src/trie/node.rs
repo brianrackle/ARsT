@@ -91,8 +91,10 @@ impl Node for Node4 {
             //check if value exists already
             if let Some(index) = self.keys.iter().position(|v| v.is_some() && v.unwrap() == *first)
             {
+                //FIXME reintroduce N0, make that default, add to it to trigger an upgrade to accomplish and Node enum add wont be needed
+                //let upgraded_node = self.children[index].unwrap_or_default().add(rest);
                 let upgraded_node = self.children[index].add(rest);
-                if let N::Nx(_) = upgraded_node {
+                if upgraded_node.is_node() {
                     self.children[index] = upgraded_node;
                 }
                 N::Empty
@@ -194,7 +196,7 @@ impl Node for Node16 {
             {
                 Ok(index) => {
                     let upgraded_node = self.children[index].add(rest);
-                    if let N::Nx(_) = upgraded_node {
+                    if upgraded_node.is_node() {
                         self.children[index] = upgraded_node;
                     }
                     N::Empty
@@ -283,7 +285,7 @@ impl Node for Node48 {
             if let Some(key) = self.keys[cur_value_index] {
                 let key_index = key as usize;
                 let upgraded_node =self.children[key_index].add(rest);
-                if let N::Nx(_) = upgraded_node {
+                if upgraded_node.is_node() {
                     self.children[key_index] = upgraded_node;
                 }
                 N::Empty
@@ -361,7 +363,7 @@ impl Node for Node256 {
             //if exists
             if let N::Nx(_) = &mut self.children[cur_value_index] {
                     let upgraded_node = self.children[cur_value_index].add(rest);
-                    if let N::Nx(_) = upgraded_node {
+                    if upgraded_node.is_node() {
                         self.children[cur_value_index] = upgraded_node;
                     }
                     N::Empty
@@ -400,6 +402,28 @@ impl N {
         match self {
             N::Empty => Node4::new().add(value),
             N::Nx(n) => n.add(value)
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        matches!(self, N::Empty)
+    }
+
+    pub fn is_node(&self) -> bool {
+        matches!(self, N::Nx(_))
+    }
+
+    pub fn unwrap(self) -> Box<dyn Node> {
+        match self {
+            N::Nx(val) => val,
+            N::Empty => panic!("called `N::unwrap()` on an `Empty` value"),
+        }
+    }
+
+    pub fn unwrap_or_default(self) -> Box<dyn Node> {
+        match self {
+            N::Nx(val) => val,
+            N::Empty => Box::new(Node4::new()) //FIXME create default for Node trait
         }
     }
 }

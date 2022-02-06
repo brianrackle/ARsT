@@ -1,5 +1,5 @@
 use crate::trie::enums::{Case, Match};
-use crate::trie::node::{NodeOption, Node};
+use crate::trie::node::{NodeOption, Node, Node4};
 
 pub struct Trie {
     matching: Match,

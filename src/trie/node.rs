@@ -5,6 +5,7 @@ use std::cmp::Ordering;
 use std::fmt::Debug;
 use std::mem;
 
+//FIXME remove is_empty and any other unused method
 pub trait Node : Debug {
     fn add(&mut self, values: &[u8]) -> NodeOption;
     fn is_full(&self) -> bool;
@@ -14,6 +15,11 @@ pub trait Node : Debug {
 }
 
 //TODO performance and memory test storing children directly in keys
+#[derive(Debug)]
+pub struct Node0 {
+    terminal: bool,
+}
+
 #[derive(Debug)]
 pub struct Node4 {
     keys: [Option<u8>; 4], //FIXME: Can remove this option and rely only on children option
@@ -54,6 +60,38 @@ pub enum NodeOption {
     Nx(Box<dyn Node>)
 }
 
+impl Node0 {
+    pub fn new() -> Self {
+        Node0 {
+            terminal: false,
+        }
+    }
+}
+
+impl Node for Node0 {
+    fn add(&mut self, values: &[u8]) -> NodeOption {
+        let mut new_node = Node4::from(self);
+        new_node.add(values);
+        NodeOption::Nx(Box::new(new_node))
+    }
+
+    fn is_full(&self) -> bool {
+        true
+    }
+
+    fn is_empty(&self) -> bool {
+        false
+    }
+
+    fn is_terminal(&self) -> bool {
+        self.terminal
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
 impl Node4 {
     pub fn new() -> Self {
         Node4 {
@@ -62,6 +100,12 @@ impl Node4 {
             size: 0,
             terminal: false,
         }
+    }
+
+    pub fn from(node : &mut Node0) -> Self {
+        let mut new_node = Node4::new();
+        new_node.terminal = node.terminal;
+        new_node
     }
 }
 
@@ -92,9 +136,7 @@ impl Node for Node4 {
             } else {
                 //add value to existing Node4 if there is room
                 self.keys[self.size] = Some(*first);
-                let mut new_node = NodeOption::Nx(Box::new(Node4::new()));
-                new_node.add(rest);
-                self.children[self.size] = new_node;
+                self.children[self.size] = Node0::new().add(rest);
                 self.size += 1;
                 NodeOption::Empty
             }
@@ -199,9 +241,7 @@ impl Node for Node16 {
                         self.keys[index] = Some(*first);
 
                         self.children[index..].rotate_right(1);
-                        let mut new_node = NodeOption::Nx(Box::new(Node4::new()));
-                        new_node.add(rest);
-                        self.children[index] = new_node;
+                        self.children[index] = Node0::new().add(rest);
 
                         self.size += 1;
                         NodeOption::Empty
@@ -282,9 +322,7 @@ impl Node for Node48 {
             } else {
                 //add to self
                 self.keys[cur_value_index] = Some(self.size as u8);
-                let mut new_node = NodeOption::Nx(Box::new(Node4::new()));
-                new_node.add(rest);
-                self.children[self.size] = new_node;
+                self.children[self.size] = Node0::new().add(rest);
                 self.size += 1;
                 NodeOption::Empty
             }
@@ -354,9 +392,7 @@ impl Node for Node256 {
                     }
                     NodeOption::Empty
             } else {
-                let mut new_node = NodeOption::Nx(Box::new(Node4::new()));
-                new_node.add(rest);
-                self.children[cur_value_index] = new_node;
+                self.children[cur_value_index] =  Node0::new().add(rest);
                 self.size += 1;
                 NodeOption::Empty
             }
@@ -385,7 +421,7 @@ impl Node for Node256 {
 
 impl Default for NodeOption {
     fn default() -> Self {
-        NodeOption::Empty
+        NodeOption::Nx(Box::new(Node0::new()))
     }
 }
 

@@ -7,7 +7,7 @@ use std::fmt::Debug;
 use std::mem;
 
 pub trait Node : Debug {
-    fn add(&mut self, values: &[u8], match_type: &Match) -> N;
+    fn add(&mut self, values: &[u8]) -> N;
     fn is_full(&self) -> bool;
     fn is_empty(&self) -> bool;
     fn is_terminal(&self) -> bool;
@@ -86,12 +86,12 @@ impl Default for Node4 {
 }
 
 impl Node for Node4 {
-    fn add(&mut self, values: &[u8], match_type: &Match) -> N {
+    fn add(&mut self, values: &[u8]) -> N {
         if let Some((first, rest)) = values.split_first() {
             //check if value exists already
             if let Some(index) = self.keys.iter().position(|v| v.is_some() && v.unwrap() == *first)
             {
-                let upgraded_node = self.children[index].add(rest, match_type);
+                let upgraded_node = self.children[index].add(rest);
                 if let N::Nx(_) = upgraded_node {
                     self.children[index] = upgraded_node;
                 }
@@ -99,13 +99,13 @@ impl Node for Node4 {
             } else if self.is_full() { //value doesnt exist yet
                 //expand to node16 and then add new value
                 let mut upgraded_node = Node16::from(self);
-                upgraded_node.add(values, match_type);
+                upgraded_node.add(values);
                 N::Nx(Box::new(upgraded_node))
             } else {
                 //add value to existing Node4 if there is room
                 self.keys[self.size] = Some(*first);
                 let mut new_node = N::Nx(Box::new(Node4::new()));
-                new_node.add(rest, match_type);
+                new_node.add(rest);
                 self.children[self.size] = new_node;
                 self.size += 1;
                 N::Empty
@@ -186,14 +186,14 @@ impl Node16 {
 }
 
 impl Node for Node16 {
-    fn add(&mut self, values: &[u8], match_type: &Match) -> N {
+    fn add(&mut self, values: &[u8]) -> N {
         if let Some((first, rest)) = values.split_first() {
             match self
                 .keys
                 .binary_search_by(|probe| Node16::val_cmp(probe, &Some(*first)))
             {
                 Ok(index) => {
-                    let upgraded_node = self.children[index].add(rest, match_type);
+                    let upgraded_node = self.children[index].add(rest);
                     if let N::Nx(_) = upgraded_node {
                         self.children[index] = upgraded_node;
                     }
@@ -203,7 +203,7 @@ impl Node for Node16 {
                     //expand to node48 and then add new value
                     if self.is_full() {
                         let mut upgraded_node = Node48::from(self);
-                        upgraded_node.add(values, match_type);
+                        upgraded_node.add(values);
                         N::Nx(Box::new(upgraded_node))
                     } else {
                         //add value in sorted order to existing Node16 if there is room
@@ -212,7 +212,7 @@ impl Node for Node16 {
 
                         self.children[index..].rotate_right(1);
                         let mut new_node = N::Nx(Box::new(Node4::new()));
-                        new_node.add(rest, match_type);
+                        new_node.add(rest);
                         self.children[index] = new_node;
 
                         self.size += 1;
@@ -276,26 +276,26 @@ impl Node48 {
 }
 
 impl Node for Node48 {
-    fn add(&mut self, values: &[u8], match_type: &Match) -> N {
+    fn add(&mut self, values: &[u8]) -> N {
         if let Some((first, rest)) = values.split_first() {
             let cur_value_index = *first as usize;
             //if exists
             if let Some(key) = self.keys[cur_value_index] {
                 let key_index = key as usize;
-                let upgraded_node =self.children[key_index].add(rest, match_type);
+                let upgraded_node =self.children[key_index].add(rest);
                 if let N::Nx(_) = upgraded_node {
                     self.children[key_index] = upgraded_node;
                 }
                 N::Empty
             } else if self.is_full() {
                 let mut upgraded_node = Node256::from(self);
-                upgraded_node.add(values, match_type);
+                upgraded_node.add(values);
                 N::Nx(Box::new(upgraded_node))
             } else {
                 //add to self
                 self.keys[cur_value_index] = Some(self.size as u8);
                 let mut new_node = N::Nx(Box::new(Node4::new()));
-                new_node.add(rest, match_type);
+                new_node.add(rest);
                 self.children[self.size] = new_node;
                 self.size += 1;
                 N::Empty
@@ -355,19 +355,19 @@ impl Node256 {
 }
 
 impl Node for Node256 {
-    fn add(&mut self, values: &[u8], match_type: &Match) -> N {
+    fn add(&mut self, values: &[u8]) -> N {
         if let Some((first, rest)) = values.split_first() {
             let cur_value_index = *first as usize;
             //if exists
             if let N::Nx(_) = &mut self.children[cur_value_index] {
-                    let upgraded_node = self.children[cur_value_index].add(rest, match_type);
+                    let upgraded_node = self.children[cur_value_index].add(rest);
                     if let N::Nx(_) = upgraded_node {
                         self.children[cur_value_index] = upgraded_node;
                     }
                     N::Empty
             } else {
                 let mut new_node = N::Nx(Box::new(Node4::new()));
-                new_node.add(rest, match_type);
+                new_node.add(rest);
                 self.children[cur_value_index] = new_node;
                 self.size += 1;
                 N::Empty
@@ -396,59 +396,11 @@ impl Node for Node256 {
 }
 
 impl N {
-    pub fn add(&mut self, value: &[u8], match_type: &Match) -> Self {
+    pub fn add(&mut self, value: &[u8]) -> Self {
         match self {
-            N::Empty => Node4::new().add(value, match_type),
-            N::Nx(n) => n.add(value, match_type)
+            N::Empty => Node4::new().add(value),
+            N::Nx(n) => n.add(value)
         }
-    }
-}
-
-//Old implementation starts here
-pub type Link = Option<Box<OldNode>>;
-pub struct OldNode {
-    children: [Link; 257],
-}
-
-impl OldNode {
-    //TODO: make variable length based off settings
-    pub fn new() -> Self {
-        OldNode {
-            children: arr![None; 257],
-        }
-    }
-
-    pub fn get_node(&self, i: usize) -> Option<&OldNode> {
-        self.children[i].as_ref().map(|c| c.as_ref())
-    }
-
-    pub fn add(&mut self, value: &[u8], match_type: &Match) {
-        match match_type {
-            Match::Exact | Match::Prefix => {
-                let mut cur = self;
-                for c in value {
-                    cur = cur.children[(*c) as usize].get_or_insert(Box::new(OldNode::new()));
-                }
-                //add terminal char when match is exact
-                if let Match::Exact = match_type {
-                    cur.children[257 - 1] = Some(Box::new(OldNode::new()))
-                }
-            }
-            Match::PrefixPostfix => {
-                //takes 0+n first characters off string
-                let mut cur: &mut OldNode;
-                for j in 0..value.len() {
-                    cur = self;
-                    for c in value[j..].iter() {
-                        cur = cur.children[(*c) as usize].get_or_insert(Box::new(OldNode::new()));
-                    }
-                }
-            }
-        }
-    }
-
-    pub fn exists(&self, c: u8) -> Option<&OldNode> {
-        self.children[c as usize].as_ref().map(|c| c.as_ref())
     }
 }
 
@@ -459,11 +411,11 @@ mod tests {
     // #[test]
     // fn trial_run_test() {
     //     let mut node = N::N4(Box::new(Node4::new()));
-    //     node = node.add("ab".as_bytes(), &Match::Exact);
-    //     node = node.add("ad".as_bytes(), &Match::Exact);
-    //     node = node.add("as".as_bytes(), &Match::Exact);
-    //     node = node.add("at".as_bytes(), &Match::Exact);
-    //     node = node.add("ace".as_bytes(), &Match::Exact);
+    //     node = node.add("ab".as_bytes());
+    //     node = node.add("ad".as_bytes());
+    //     node = node.add("as".as_bytes());
+    //     node = node.add("at".as_bytes());
+    //     node = node.add("ace".as_bytes());
     //
     //     if let N::N4(root_node) = node {
     //         println!("root: {:#?}",root_node);
@@ -478,7 +430,7 @@ mod tests {
     fn test_all_upgrades_occur_exact_match() {
         let mut node = N::Nx(Box::new(Node4::new()));
         for i in 0..=3 {
-            let upgrade = node.add(&[i], &Match::Exact);
+            let upgrade = node.add(&[i]);
             if let N::Nx(_) = upgrade {
                 node = upgrade;
             }
@@ -488,7 +440,7 @@ mod tests {
         }
 
         for i in 4..=15 {
-            let upgrade = node.add(&[i], &Match::Exact);
+            let upgrade = node.add(&[i]);
             if let N::Nx(_) = upgrade {
                 node = upgrade;
             }
@@ -498,7 +450,7 @@ mod tests {
         }
 
         for i in 16..=47 {
-            let upgrade = node.add(&[i], &Match::Exact);
+            let upgrade = node.add(&[i]);
             if let N::Nx(_) = upgrade {
                 node = upgrade;
             }
@@ -508,7 +460,7 @@ mod tests {
         }
 
         for i in 48..=255 {
-            let upgrade = node.add(&[i], &Match::Exact);
+            let upgrade = node.add(&[i]);
             if let N::Nx(_) = upgrade {
                 node = upgrade;
             }
@@ -524,7 +476,7 @@ mod tests {
         let mut node = N::Nx(Box::new(Node4::new()));
 
         for i in 0..48 {
-            let upgrade =  node.add(&[i * 2], &Match::Exact);
+            let upgrade =  node.add(&[i * 2]);
             if let N::Nx(_) = upgrade {
                 node = upgrade;
             }
@@ -557,7 +509,7 @@ mod tests {
 
         for i in 0..=255 {
             if i % 2 == 0 {
-                let upgrade = node.add(&[i], &Match::Exact);
+                let upgrade = node.add(&[i]);
                 if let N::Nx(_) = upgrade {
                     node = upgrade;
                 }

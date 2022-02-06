@@ -1,10 +1,10 @@
 use crate::trie::enums::{Case, Match};
-use crate::trie::node::{N, Node};
+use crate::trie::node::{NodeOption, Node};
 
 pub struct Trie {
     matching: Match,
     case: Case,
-    index: N, //change this to Link for consistency
+    index: NodeOption, //change this to Link for consistency
 }
 
 //TODO: add fn options() for discovering autocomplete options
@@ -13,7 +13,7 @@ impl Trie {
         Trie {
             matching: matching,
             case: case,
-            index: N::default(),
+            index: NodeOption::default(),
         }
     }
 

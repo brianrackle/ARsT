@@ -11,6 +11,7 @@ pub trait Node : Debug {
     fn is_full(&self) -> bool;
     fn is_empty(&self) -> bool;
     fn is_terminal(&self) -> bool;
+    fn exists(&self, values: &[u8]) -> bool;
     fn as_any(&self) -> &dyn Any;
 }
 
@@ -89,6 +90,16 @@ impl Node for Node0 {
         self.terminal
     }
 
+    //FIXME test looking for word shorter, same, and longer than what tree has
+    fn exists(&self, values: &[u8]) -> bool {
+        //if more values exists then a match cant exist
+        if let Some((_first, _rest)) = values.split_first() {
+            false
+        } else {
+            self.terminal
+        }
+    }
+
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -162,6 +173,24 @@ impl Node for Node4 {
         self.terminal
     }
 
+    fn exists(&self, values: &[u8]) -> bool {
+        if let Some((first, rest)) = values.split_first() {
+            //check if value exists already
+            if let Some(index) = self.keys.iter().position(|v| v.is_some() && v.unwrap() == *first)
+            {
+                if let Some(child) = self.children[index].as_ref() {
+                    child.exists(rest)
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+        } else {
+            self.terminal
+        }
+    }
+
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -231,7 +260,7 @@ impl Node for Node16 {
                     let upgraded_node = self.children[index]
                         .as_mut()
                         .map_or_else(| | Box::new(Node0::new()).add(rest),
-                                     |v| v.add(rest));;
+                                     |v| v.add(rest));
                     if upgraded_node.is_some() {
                         self.children[index] = upgraded_node;
                     }
@@ -272,6 +301,29 @@ impl Node for Node16 {
 
     fn is_terminal(&self) -> bool {
         self.terminal
+    }
+
+    //FIXME create utility methods for finding key index and child index to cleanup and reduce copy paste
+    fn exists(&self, values: &[u8]) -> bool {
+        if let Some((first, rest)) = values.split_first() {
+            match self
+                .keys
+                .binary_search_by(|probe| Node16::val_cmp(probe, &Some(*first)))
+            {
+                Ok(index) => {
+                    if let Some(child) = self.children[index].as_ref() {
+                        child.exists(rest)
+                    } else {
+                        false
+                    }
+                }
+                Err(_) => {
+                    false
+                }
+            }
+        } else {
+            self.terminal
+        }
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -318,7 +370,6 @@ impl Node for Node48 {
             //if exists
             if let Some(key) = self.keys[cur_value_index] {
                 let key_index = key as usize;
-                // self.children[key_index].a
                 let upgraded_node =  self.children[key_index]
                     .as_mut()
                     .map_or_else(| | Box::new(Node0::new()).add(rest),
@@ -354,6 +405,25 @@ impl Node for Node48 {
 
     fn is_terminal(&self) -> bool {
         self.terminal
+    }
+
+    fn exists(&self, values: &[u8]) -> bool {
+        if let Some((first, rest)) = values.split_first() {
+            let cur_value_index = *first as usize;
+            //if exists
+            if let Some(key) = self.keys[cur_value_index] {
+                let key_index = key as usize;
+                if let Some(child) = self.children[key_index].as_ref() {
+                    child.exists(rest)
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+        } else {
+            self.terminal
+        }
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -429,6 +499,24 @@ impl Node for Node256 {
         self.terminal
     }
 
+    fn exists(&self, values: &[u8]) -> bool {
+        if let Some((first, rest)) = values.split_first() {
+            let cur_value_index = *first as usize;
+            //if exists
+            if self.children[cur_value_index].is_some() {
+                if let Some(child) = self.children[cur_value_index].as_ref() {
+                    child.exists(rest)
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+        } else {
+            self.terminal
+        }
+    }
+
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -455,9 +543,10 @@ mod tests {
     //     }
     //     // println!("root: {:#?}",node);
     // }
+
     #[test]
     fn test_adding_words_to_node4() {
-        let mut node = NodeOption::Some(Box::new(Node4::new()));
+        let mut node = NodeOption::Some(Box::new(Node0::new()));
         for i in 0..=3 {
             let upgrade = node.as_mut().unwrap().add(&[0, i]);
             if upgrade.is_some() {

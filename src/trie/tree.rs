@@ -1,58 +1,55 @@
 use crate::trie::enums::{Case, Match};
-use crate::trie::node::{Node, Node4, NodeOption};
+use crate::trie::node::{Node, Node0, Node4, NodeOption};
 
 pub struct Trie {
     matching: Match,
     case: Case,
-    index: NodeOption,
+    root: NodeOption,
 }
 
 //TODO: add fn options() for discovering autocomplete options
 impl Trie {
     pub fn new(matching: Match, case: Case) -> Self {
         Trie {
-            matching: matching,
-            case: case,
-            index: NodeOption::default(),
+            matching,
+            case,
+            root: NodeOption::default(),
         }
     }
 
-    // pub fn add(&mut self, value: &str) {
-    //     if value.len() != 0 {
-    //         self.index.add(value.as_bytes(), &self.matching)
-    //     }
-    // }
-    //
-    // pub fn exists(&self, value: &str) -> bool {
-    //     let mut cur = &self.index;
-    //
-    //     for c in self.set_case(value).bytes() {
-    //         match cur.exists(c) {
-    //             Some(t) => {
-    //                 cur = &t;
-    //             }
-    //             None => return false,
-    //         }
-    //     }
-    //
-    //     //look for terminal character if exact match
-    //     //use is_terminal on last node instead
-    //     match self.matching {
-    //         Match::Exact => cur.get_node(256).is_some(), //put in index 0 (\ or null)
-    //         _ => true,
-    //     }
-    // }
-    //
-    // fn set_case(&self, value: &str) -> String {
-    //     match self.case {
-    //         Case::Insensitve => value.to_lowercase(),
-    //         Case::Sensitive => String::from(value),
-    //     }
-    // }
+    pub fn add(&mut self, value: &str) {
+        if value.len() != 0 {
+            let upgraded_node = self.root
+                .as_mut()
+                .map_or_else(| | Box::new(Node0::new()).add(value.as_bytes()),
+                             |v| v.add(value.as_bytes()));
+            if upgraded_node.is_some() {
+                self.root = upgraded_node;
+            }
+        }
+    }
+
+    pub fn exists(&self, value: &str) -> bool {
+        let case_corrected = match self.case {
+            Case::Insensitve => value.to_lowercase(),
+            Case::Sensitive => String::from(value)
+        };
+
+        if let Some(node) = self.root.as_ref() {
+            node.exists(case_corrected.as_bytes())
+        } else {
+            false
+        }
+    }
 }
 
 #[cfg(test)] //module should only be compiled for testing
 mod test {
+    use std::fs::File;
+    use std::io;
+    use std::io::{BufRead, BufReader, Lines};
+    use std::path::PathBuf;
+    use crate::trie::node::{Node0, NodeOption};
     use super::{Case, Match, Trie};
 
     //doesnt check terminal char
@@ -65,6 +62,26 @@ mod test {
     //     }
     //     true
     // }
+
+    pub fn english_dict() -> Lines<BufReader<File>> {
+        let file = File::open(PathBuf::from("src/test/dictionary.txt")).unwrap();
+        io::BufReader::new(file).lines()
+    }
+
+    #[test]
+    fn test_building_english_dictionary() {
+        let mut root = NodeOption::Some(Box::new(Node0::new()));
+        for word in english_dict().map(|l| l.unwrap()) {
+            let upgrade = root.as_mut().unwrap().add(word.as_bytes());
+            if upgrade.is_some() {
+                root = upgrade;
+            }
+        }
+
+        for word in english_dict().map(|l| l.unwrap()) {
+            assert!(root.as_ref().unwrap().exists(word.as_bytes()))
+        }
+    }
 
     #[test]
     fn add_string_chars_exist() {

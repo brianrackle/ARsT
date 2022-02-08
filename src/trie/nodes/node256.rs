@@ -1,7 +1,8 @@
-use crate::trie::nodes::node::{Node, NodeOption};
+use crate::trie::nodes::node::{KeyChildIndex, Node, NodeLocation, NodeOption};
 use crate::trie::nodes::{node0::Node0, node48::Node48};
 use arr_macro::arr;
 use std::any::Any;
+use crate::trie::nodes::node::NodeLocation::{Exists, Insert};
 
 #[derive(Debug)]
 pub struct Node256 {
@@ -39,25 +40,44 @@ impl Node256 {
         new_node.size = node.size;
         new_node
     }
+
+    fn get_child_index(&self, value: u8) -> NodeLocation {
+        let cur_value_index = value as usize;
+        if self.children[cur_value_index].is_some() {
+            NodeLocation::Exists(KeyChildIndex{key: 0, child: cur_value_index})
+        } else {
+            NodeLocation::Insert(KeyChildIndex{key: 0, child: cur_value_index})
+        }
+    }
+
+    fn exists_add(&mut self, index: &KeyChildIndex, rest: &[u8]) -> NodeOption {
+        let upgraded_node = self.children[index.child]
+            .as_mut()
+            .map_or_else(|| Box::new(Node0::new()).add(rest), |v| v.add(rest));
+        if upgraded_node.is_some() {
+            self.children[index.child] = upgraded_node;
+        }
+        None
+    }
+
+    fn insert_add(&mut self, index: &KeyChildIndex, first: u8, rest: &[u8]) -> NodeOption {
+        self.children[index.child] = Node0::new().add(rest);
+        self.size += 1;
+        None
+    }
+
+    fn upgrade_add(&mut self, values: &[u8]) -> NodeOption {
+        unimplemented!()
+    }
 }
 
 impl Node for Node256 {
     fn add(&mut self, values: &[u8]) -> NodeOption {
         if let Some((first, rest)) = values.split_first() {
-            let cur_value_index = *first as usize;
-            //if exists
-            if self.children[cur_value_index].is_some() {
-                let upgraded_node = self.children[cur_value_index]
-                    .as_mut()
-                    .map_or_else(|| Box::new(Node0::new()).add(rest), |v| v.add(rest));
-                if upgraded_node.is_some() {
-                    self.children[cur_value_index] = upgraded_node;
-                }
-                None
-            } else {
-                self.children[cur_value_index] = Node0::new().add(rest);
-                self.size += 1;
-                None
+            match &self.get_child_index(*first) {
+                Exists(index) => self.exists_add(index, rest),
+                Insert(index) => self.insert_add(index, *first, rest),
+                Upgrade => self.upgrade_add(values),
             }
         } else {
             self.terminal = true;

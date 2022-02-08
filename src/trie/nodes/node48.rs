@@ -1,7 +1,8 @@
-use crate::trie::nodes::node::{Node, NodeOption};
+use crate::trie::nodes::node::{KeyChildIndex, Node, NodeLocation, NodeOption};
 use crate::trie::nodes::{node0::Node0, node16::Node16, node256::Node256};
 use arr_macro::arr;
 use std::any::Any;
+use crate::trie::nodes::node::NodeLocation::{Exists, Insert, Upgrade};
 
 #[derive(Debug)]
 pub struct Node48 {
@@ -42,32 +43,49 @@ impl Node48 {
         new_node.size = node.size;
         new_node
     }
+
+    fn get_child_index(&self, value: u8) -> NodeLocation {
+        let cur_value_index = value as usize;
+        if let Some(key_value) = self.keys[cur_value_index] {
+            Exists(KeyChildIndex{key: cur_value_index, child: key_value as usize})
+        } else if !self.is_full() {
+            Insert(KeyChildIndex{key: cur_value_index, child: self.size})
+        } else {
+            Upgrade
+        }
+    }
+
+    fn exists_add(&mut self, index: &KeyChildIndex, rest: &[u8]) -> NodeOption {
+        let upgraded_node = self.children[index.child]
+            .as_mut()
+            .map_or_else(|| Box::new(Node0::new()).add(rest), |v| v.add(rest));
+        if upgraded_node.is_some() {
+            self.children[index.child] = upgraded_node;
+        }
+        None
+    }
+
+    fn insert_add(&mut self, index: &KeyChildIndex, first: u8, rest: &[u8]) -> NodeOption {
+        self.keys[index.key] = Some(self.size as u8); //FIXME this is the same as index.child
+        self.children[index.child] = Node0::new().add(rest);
+        self.size += 1;
+        None
+    }
+
+    fn upgrade_add(&mut self, values: &[u8]) -> NodeOption {
+        let mut upgraded_node = Node256::from(self);
+        upgraded_node.add(values);
+        Some(Box::new(upgraded_node))
+    }
 }
 
 impl Node for Node48 {
     fn add(&mut self, values: &[u8]) -> NodeOption {
         if let Some((first, rest)) = values.split_first() {
-            let cur_value_index = *first as usize;
-            //if exists
-            if let Some(key) = self.keys[cur_value_index] {
-                let key_index = key as usize;
-                let upgraded_node = self.children[key_index]
-                    .as_mut()
-                    .map_or_else(|| Box::new(Node0::new()).add(rest), |v| v.add(rest));
-                if upgraded_node.is_some() {
-                    self.children[key_index] = upgraded_node;
-                }
-                None
-            } else if self.is_full() {
-                let mut upgraded_node = Node256::from(self);
-                upgraded_node.add(values);
-                Some(Box::new(upgraded_node))
-            } else {
-                //add to self
-                self.keys[cur_value_index] = Some(self.size as u8);
-                self.children[self.size] = Node0::new().add(rest);
-                self.size += 1;
-                None
+            match &self.get_child_index(*first) {
+                Exists(index) => self.exists_add(index, rest),
+                Insert(index) => self.insert_add(index, *first, rest),
+                Upgrade => self.upgrade_add(values),
             }
         } else {
             self.terminal = true;

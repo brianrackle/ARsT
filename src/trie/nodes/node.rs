@@ -5,16 +5,32 @@ use std::fmt::Debug;
 
 //FIXME remove is_empty and any other unused method
 pub trait Node: Debug {
-    fn add(&mut self, values: &[u8]) -> NodeOption;
+    fn add(&mut self, values: &[u8]) -> NodeOption; //turn into default implementation
     fn is_full(&self) -> bool;
     fn is_empty(&self) -> bool;
     fn is_terminal(&self) -> bool;
     fn exists(&self, values: &[u8]) -> bool;
     fn as_any(&self) -> &dyn Any;
+    //fn get_child_index(&self, value: u8) -> NodeLocation;
+    //existing_add
+    //insert_add
+    //upgrade_add
 }
+
 
 //see: https://www.the-paper-trail.org/post/art-paper-notes/
 pub type NodeOption = Option<Box<dyn Node>>;
+
+pub enum NodeLocation {
+    Exists(KeyChildIndex), //key child
+    Insert(KeyChildIndex),
+    Upgrade
+}
+
+pub struct KeyChildIndex {
+    pub(crate) key: usize,
+    pub(crate) child: usize
+}
 
 pub fn val_cmp(a: &Option<u8>, b: &Option<u8>) -> Ordering {
     if a.is_none() && b.is_none() {

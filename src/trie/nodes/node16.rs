@@ -1,7 +1,8 @@
-use crate::trie::nodes::node::{val_cmp, Node, NodeOption};
+use crate::trie::nodes::node::{val_cmp, Node, NodeOption, NodeLocation, KeyChildIndex};
 use crate::trie::nodes::{node0::Node0, node4::Node4, node48::Node48};
 use arr_macro::arr;
 use std::any::Any;
+use crate::trie::nodes::node::NodeLocation::{Exists, Insert, Upgrade};
 
 #[derive(Debug)]
 pub struct Node16 {
@@ -49,42 +50,60 @@ impl Node16 {
         new_node.size = node.size;
         new_node
     }
+
+    fn get_child_index(&self, value: u8) -> NodeLocation {
+        match self.keys
+            .binary_search_by(|probe| val_cmp(probe, &Some(value))) {
+            Ok(index) => {
+                Exists(KeyChildIndex{key: index, child: index})
+            }
+            Err(index) => {
+                if !self.is_full() {
+                    Insert(KeyChildIndex{key: index, child: index})
+                } else {
+                    Upgrade
+                }
+            }
+        }
+    }
+
+    fn exists_add(&mut self, index: &KeyChildIndex, rest: &[u8]) -> NodeOption {
+        let upgraded_node = self.children[index.child]
+            .as_mut()
+            .map_or_else(|| Box::new(Node0::new()).add(rest), |v| v.add(rest));
+        if upgraded_node.is_some() {
+            self.children[index.child] = upgraded_node;
+        }
+        None
+    }
+
+    fn insert_add(&mut self, index: &KeyChildIndex, first: u8, rest: &[u8]) -> NodeOption {
+        // add value in sorted order to existing Node16 if there is room
+        self.keys[index.key..].rotate_right(1); //shift right from index
+        self.keys[index.key] = Some(first);
+
+        self.children[index.child..].rotate_right(1);
+        self.children[index.child] = Node0::new().add(rest);
+
+        self.size += 1;
+        None
+    }
+
+    fn upgrade_add(&mut self, values: &[u8]) -> NodeOption {
+        //expand to node48 and then add new value
+        let mut upgraded_node = Node48::from(self);
+        upgraded_node.add(values);
+        Some(Box::new(upgraded_node))
+    }
 }
 
 impl Node for Node16 {
     fn add(&mut self, values: &[u8]) -> NodeOption {
         if let Some((first, rest)) = values.split_first() {
-            match self
-                .keys
-                .binary_search_by(|probe| val_cmp(probe, &Some(*first)))
-            {
-                Ok(index) => {
-                    let upgraded_node = self.children[index]
-                        .as_mut()
-                        .map_or_else(|| Box::new(Node0::new()).add(rest), |v| v.add(rest));
-                    if upgraded_node.is_some() {
-                        self.children[index] = upgraded_node;
-                    }
-                    None
-                }
-                Err(index) => {
-                    //expand to node48 and then add new value
-                    if self.is_full() {
-                        let mut upgraded_node = Node48::from(self);
-                        upgraded_node.add(values);
-                        Some(Box::new(upgraded_node))
-                    } else {
-                        //add value in sorted order to existing Node16 if there is room
-                        self.keys[index..].rotate_right(1); //shift right from index
-                        self.keys[index] = Some(*first);
-
-                        self.children[index..].rotate_right(1);
-                        self.children[index] = Node0::new().add(rest);
-
-                        self.size += 1;
-                        None
-                    }
-                }
+            match &self.get_child_index(*first) {
+                Exists(index) => self.exists_add(index, rest),
+                Insert(index) => self.insert_add(index, *first, rest),
+                Upgrade => self.upgrade_add(values),
             }
         } else {
             self.terminal = true;

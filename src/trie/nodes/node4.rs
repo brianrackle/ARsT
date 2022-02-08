@@ -1,7 +1,8 @@
-use crate::trie::nodes::node::{Node, NodeOption};
+use crate::trie::nodes::node::{KeyChildIndex, Node, NodeLocation, NodeOption};
 use crate::trie::nodes::{node0::Node0, node16::Node16};
 use arr_macro::arr;
 use std::any::Any;
+use crate::trie::nodes::node::NodeLocation::{Exists, Insert, Upgrade};
 
 #[derive(Debug)]
 pub struct Node4 {
@@ -26,6 +27,44 @@ impl Node4 {
         new_node.terminal = node.terminal;
         new_node
     }
+
+    fn get_child_index(&self, value: u8) -> NodeLocation {
+        if let Some(index) = self.keys
+            .iter()
+            .position(|v| v.is_some() && v.unwrap() == value) {
+            Exists(KeyChildIndex{key: index, child: index})
+        } else if !self.is_full() {
+            Insert(KeyChildIndex{key: self.size, child: self.size})
+        } else {
+            Upgrade
+        }
+    }
+
+    fn exists_add(&mut self, index: &KeyChildIndex, rest: &[u8]) -> NodeOption {
+        //if None create Node0 and add rest, if Some add content
+        let upgraded_node = self.children[index.child]
+            .as_mut()
+            .map_or_else(|| Box::new(Node0::new()).add(rest), |v| v.add(rest));
+        if upgraded_node.is_some() {
+            self.children[index.child] = upgraded_node;
+        }
+        None
+    }
+
+    fn insert_add(&mut self, index: &KeyChildIndex, first: u8, rest: &[u8]) -> NodeOption {
+        //add value to existing Node4 if there is room
+        self.keys[index.key] = Some(first);
+        self.children[index.child] = Node0::new().add(rest);
+        self.size += 1;
+        None
+    }
+
+    fn upgrade_add(&mut self, values: &[u8]) -> NodeOption {
+        //expand to node16 and then add new value
+        let mut upgraded_node = Node16::from(self);
+        upgraded_node.add(values);
+        Some(Box::new(upgraded_node))
+    }
 }
 
 impl Default for Node4 {
@@ -37,32 +76,10 @@ impl Default for Node4 {
 impl Node for Node4 {
     fn add(&mut self, values: &[u8]) -> NodeOption {
         if let Some((first, rest)) = values.split_first() {
-            //check if value exists already
-            if let Some(index) = self
-                .keys
-                .iter()
-                .position(|v| v.is_some() && v.unwrap() == *first)
-            {
-                //if None create Node0 and add rest, if Some add content
-                let upgraded_node = self.children[index]
-                    .as_mut()
-                    .map_or_else(|| Box::new(Node0::new()).add(rest), |v| v.add(rest));
-                if upgraded_node.is_some() {
-                    self.children[index] = upgraded_node;
-                }
-                None
-            } else if self.is_full() {
-                //value doesnt exist yet
-                //expand to node16 and then add new value
-                let mut upgraded_node = Node16::from(self);
-                upgraded_node.add(values);
-                Some(Box::new(upgraded_node))
-            } else {
-                //add value to existing Node4 if there is room
-                self.keys[self.size] = Some(*first);
-                self.children[self.size] = Node0::new().add(rest);
-                self.size += 1;
-                None
+            match &self.get_child_index(*first) {
+                Exists(index) => self.exists_add(index, rest),
+                Insert(index) => self.insert_add(index, *first, rest),
+                Upgrade => self.upgrade_add(values),
             }
         } else {
             self.terminal = true;
@@ -84,19 +101,15 @@ impl Node for Node4 {
 
     fn exists(&self, values: &[u8]) -> bool {
         if let Some((first, rest)) = values.split_first() {
-            //check if value exists already
-            if let Some(index) = self
-                .keys
-                .iter()
-                .position(|v| v.is_some() && v.unwrap() == *first)
-            {
-                if let Some(child) = self.children[index].as_ref() {
-                    child.exists(rest)
-                } else {
-                    false
+            match self.get_child_index(*first) {
+                Exists(index) => {
+                    if let Some(child) = self.children[index.child].as_ref() {
+                        child.exists(rest)
+                    } else {
+                        false
+                    }
                 }
-            } else {
-                false
+                _ => false
             }
         } else {
             self.terminal

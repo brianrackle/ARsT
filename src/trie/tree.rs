@@ -47,6 +47,11 @@ impl Tree {
             false
         }
     }
+
+    pub fn auto_complete(&self, value: &str, results :usize) -> Vec<String> {
+        //search to value.last and then enumerate all
+        todo!()
+    }
 }
 
 #[cfg(test)] //module should only be compiled for testing

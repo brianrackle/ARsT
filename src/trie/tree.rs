@@ -1,16 +1,17 @@
 use crate::trie::enums::{Case, Match};
-use crate::trie::node::{Node, Node0, Node4, NodeOption};
+use crate::trie::nodes::node::{Node, NodeOption};
+use crate::trie::nodes::node0::Node0;
 
-pub struct Trie {
+pub struct Tree {
     matching: Match,
     case: Case,
     root: NodeOption,
 }
 
 //TODO: add fn options() for discovering autocomplete options
-impl Trie {
+impl Tree {
     pub fn new(matching: Match, case: Case) -> Self {
-        Trie {
+        Tree {
             matching,
             case,
             root: NodeOption::default(),
@@ -18,11 +19,16 @@ impl Trie {
     }
 
     pub fn add(&mut self, value: &str) {
-        if value.len() != 0 {
+        if !value.is_empty() {
+            let case_corrected = match self.case {
+                Case::Insensitve => value.to_lowercase(),
+                Case::Sensitive => String::from(value)
+            };
+
             let upgraded_node = self.root
                 .as_mut()
-                .map_or_else(| | Box::new(Node0::new()).add(value.as_bytes()),
-                             |v| v.add(value.as_bytes()));
+                .map_or_else(| | Box::new(Node0::new()).add(case_corrected.as_bytes()),
+                             |v| v.add(case_corrected.as_bytes()));
             if upgraded_node.is_some() {
                 self.root = upgraded_node;
             }
@@ -49,8 +55,7 @@ mod test {
     use std::io;
     use std::io::{BufRead, BufReader, Lines};
     use std::path::PathBuf;
-    use crate::trie::node::{Node0, NodeOption};
-    use super::{Case, Match, Trie};
+    use super::{Case, Match, Tree};
 
     //doesnt check terminal char
     // fn only_has_chars(n: &OldNode, s: &str) -> bool {
@@ -70,18 +75,33 @@ mod test {
 
     #[test]
     fn test_building_english_dictionary() {
-        let mut root = NodeOption::Some(Box::new(Node0::new()));
-        for word in english_dict().map(|l| l.unwrap()) {
-            let upgrade = root.as_mut().unwrap().add(word.as_bytes());
-            if upgrade.is_some() {
-                root = upgrade;
-            }
+        let mut tree = Tree::new(Match::Exact, Case::Insensitve);
+
+        let dict = english_dict().map(|l| l.unwrap()).collect::<Vec<_>>();
+        for word in &dict {
+            tree.add(word);
         }
 
-        for word in english_dict().map(|l| l.unwrap()) {
-            assert!(root.as_ref().unwrap().exists(word.as_bytes()))
+        for word in &dict {
+            assert!(tree.exists(word));
         }
     }
+
+    // #[bench]
+    // fn bench_building_english_dictionary(b :&mut Bencher) {
+    //     let mut root = NodeOption::Some(Box::new(Node0::new()));
+    //     let dict = english_dict().map(|l| l.unwrap()).collect::<Vec<_>>();
+    //     b.iter(|| {
+    //         for word in dict {
+    //             let upgrade = root.as_mut().unwrap().add(word.as_bytes());
+    //             if upgrade.is_some() {
+    //                 root = upgrade;
+    //             }
+    //         }
+    //         root
+    //     });
+    // }
+
 
     #[test]
     fn add_string_chars_exist() {

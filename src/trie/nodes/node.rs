@@ -4,7 +4,7 @@ use std::cmp::Ordering;
 use std::fmt::Debug;
 
 //FIXME remove is_empty and any other unused method
-pub trait Node : Debug {
+pub trait Node: Debug {
     fn add(&mut self, values: &[u8]) -> NodeOption;
     fn is_full(&self) -> bool;
     fn is_empty(&self) -> bool;
@@ -30,8 +30,10 @@ pub fn val_cmp(a: &Option<u8>, b: &Option<u8>) -> Ordering {
 
 #[cfg(test)]
 mod tests {
-    use crate::trie::nodes::{node0::Node0, node4::Node4, node16::Node16, node48::Node48, node256::Node256};
     use super::*;
+    use crate::trie::nodes::{
+        node0::Node0, node16::Node16, node256::Node256, node4::Node4, node48::Node48,
+    };
 
     // #[test]
     // fn trial_run_test() {
@@ -61,7 +63,12 @@ mod tests {
             }
         }
 
-        assert!(node.as_ref().unwrap().as_any().downcast_ref::<Node4>().is_some());
+        assert!(node
+            .as_ref()
+            .unwrap()
+            .as_any()
+            .downcast_ref::<Node4>()
+            .is_some());
         assert!(node.as_ref().unwrap().is_full());
 
         for i in 4..=15 {
@@ -71,7 +78,12 @@ mod tests {
             }
         }
 
-        assert!(node.as_ref().unwrap().as_any().downcast_ref::<Node16>().is_some());
+        assert!(node
+            .as_ref()
+            .unwrap()
+            .as_any()
+            .downcast_ref::<Node16>()
+            .is_some());
         assert!(node.as_ref().unwrap().is_full());
 
         for i in 16..=47 {
@@ -81,9 +93,13 @@ mod tests {
             }
         }
 
-        assert!(node.as_ref().unwrap().as_any().downcast_ref::<Node48>().is_some());
+        assert!(node
+            .as_ref()
+            .unwrap()
+            .as_any()
+            .downcast_ref::<Node48>()
+            .is_some());
         assert!(node.as_ref().unwrap().is_full());
-
 
         for i in 48..=255 {
             let upgrade = node.as_mut().unwrap().add(&[i]);
@@ -92,7 +108,12 @@ mod tests {
             }
         }
 
-        assert!(node.as_ref().unwrap().as_any().downcast_ref::<Node256>().is_some());
+        assert!(node
+            .as_ref()
+            .unwrap()
+            .as_any()
+            .downcast_ref::<Node256>()
+            .is_some());
         assert!(node.as_ref().unwrap().is_full());
     }
 }

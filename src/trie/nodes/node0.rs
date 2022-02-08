@@ -1,6 +1,6 @@
-use std::any::Any;
 use crate::trie::nodes::node::{Node, NodeOption};
 use crate::trie::nodes::node4::Node4;
+use std::any::Any;
 
 //TODO performance and memory test storing children directly in keys
 #[derive(Debug)]
@@ -10,9 +10,7 @@ pub struct Node0 {
 
 impl Node0 {
     pub fn new() -> Self {
-        Node0 {
-            terminal: false,
-        }
+        Node0 { terminal: false }
     }
 }
 

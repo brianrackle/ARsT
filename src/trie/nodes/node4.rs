@@ -1,7 +1,7 @@
-use std::any::Any;
 use crate::trie::nodes::node::{Node, NodeOption};
 use crate::trie::nodes::{node0::Node0, node16::Node16};
 use arr_macro::arr;
+use std::any::Any;
 
 #[derive(Debug)]
 pub struct Node4 {
@@ -21,7 +21,7 @@ impl Node4 {
         }
     }
 
-    pub fn from(node : &mut Node0) -> Self {
+    pub fn from(node: &mut Node0) -> Self {
         let mut new_node = Node4::new();
         new_node.terminal = node.terminal;
         new_node
@@ -38,18 +38,21 @@ impl Node for Node4 {
     fn add(&mut self, values: &[u8]) -> NodeOption {
         if let Some((first, rest)) = values.split_first() {
             //check if value exists already
-            if let Some(index) = self.keys.iter().position(|v| v.is_some() && v.unwrap() == *first)
+            if let Some(index) = self
+                .keys
+                .iter()
+                .position(|v| v.is_some() && v.unwrap() == *first)
             {
                 //if None create Node0 and add rest, if Some add content
-                let upgraded_node  = self.children[index]
+                let upgraded_node = self.children[index]
                     .as_mut()
-                    .map_or_else(| | Box::new(Node0::new()).add(rest),
-                                 |v| v.add(rest));
+                    .map_or_else(|| Box::new(Node0::new()).add(rest), |v| v.add(rest));
                 if upgraded_node.is_some() {
                     self.children[index] = upgraded_node;
                 }
                 None
-            } else if self.is_full() { //value doesnt exist yet
+            } else if self.is_full() {
+                //value doesnt exist yet
                 //expand to node16 and then add new value
                 let mut upgraded_node = Node16::from(self);
                 upgraded_node.add(values);
@@ -82,7 +85,10 @@ impl Node for Node4 {
     fn exists(&self, values: &[u8]) -> bool {
         if let Some((first, rest)) = values.split_first() {
             //check if value exists already
-            if let Some(index) = self.keys.iter().position(|v| v.is_some() && v.unwrap() == *first)
+            if let Some(index) = self
+                .keys
+                .iter()
+                .position(|v| v.is_some() && v.unwrap() == *first)
             {
                 if let Some(child) = self.children[index].as_ref() {
                     child.exists(rest)
@@ -102,7 +108,6 @@ impl Node for Node4 {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -117,7 +122,9 @@ mod tests {
             }
         }
         if let Some(root) = node {
-            let child = root.as_any().downcast_ref::<Node4>().unwrap().children[0].as_ref().unwrap();
+            let child = root.as_any().downcast_ref::<Node4>().unwrap().children[0]
+                .as_ref()
+                .unwrap();
             assert!(child.is_full());
         }
     }

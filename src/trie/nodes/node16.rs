@@ -1,12 +1,12 @@
-use std::any::Any;
-use crate::trie::nodes::node::{Node, NodeOption, val_cmp};
+use crate::trie::nodes::node::{val_cmp, Node, NodeOption};
 use crate::trie::nodes::{node0::Node0, node4::Node4, node48::Node48};
 use arr_macro::arr;
+use std::any::Any;
 
 #[derive(Debug)]
 pub struct Node16 {
     pub(crate) keys: [Option<u8>; 16],
-    pub(crate) children: [NodeOption; 16],     //value represents value with matching node in children index
+    pub(crate) children: [NodeOption; 16], //value represents value with matching node in children index
     pub(crate) size: usize,
     pub(crate) terminal: bool,
 }
@@ -59,11 +59,9 @@ impl Node for Node16 {
                 .binary_search_by(|probe| val_cmp(probe, &Some(*first)))
             {
                 Ok(index) => {
-
                     let upgraded_node = self.children[index]
                         .as_mut()
-                        .map_or_else(| | Box::new(Node0::new()).add(rest),
-                                     |v| v.add(rest));
+                        .map_or_else(|| Box::new(Node0::new()).add(rest), |v| v.add(rest));
                     if upgraded_node.is_some() {
                         self.children[index] = upgraded_node;
                     }
@@ -120,9 +118,7 @@ impl Node for Node16 {
                         false
                     }
                 }
-                Err(_) => {
-                    false
-                }
+                Err(_) => false,
             }
         } else {
             self.terminal

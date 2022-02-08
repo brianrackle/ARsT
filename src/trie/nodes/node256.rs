@@ -1,8 +1,7 @@
-use std::any::Any;
 use crate::trie::nodes::node::{Node, NodeOption};
 use crate::trie::nodes::{node0::Node0, node48::Node48};
 use arr_macro::arr;
-
+use std::any::Any;
 
 #[derive(Debug)]
 pub struct Node256 {
@@ -50,14 +49,13 @@ impl Node for Node256 {
             if self.children[cur_value_index].is_some() {
                 let upgraded_node = self.children[cur_value_index]
                     .as_mut()
-                    .map_or_else(| | Box::new(Node0::new()).add(rest),
-                                 |v| v.add(rest));
+                    .map_or_else(|| Box::new(Node0::new()).add(rest), |v| v.add(rest));
                 if upgraded_node.is_some() {
                     self.children[cur_value_index] = upgraded_node;
                 }
                 None
             } else {
-                self.children[cur_value_index] =  Node0::new().add(rest);
+                self.children[cur_value_index] = Node0::new().add(rest);
                 self.size += 1;
                 None
             }
@@ -104,8 +102,8 @@ impl Node for Node256 {
 
 #[cfg(test)]
 mod tests {
-    use crate::trie::nodes::node4::Node4;
     use super::*;
+    use crate::trie::nodes::node4::Node4;
 
     #[test]
     fn order_preserved_256_exact_match() {
@@ -126,7 +124,7 @@ mod tests {
                 match &c {
                     None => assert_ne!(i % 2, 0),
                     Some(_) => assert_eq!(i % 2, 0),
-                    _ => panic!()
+                    _ => panic!(),
                 }
             }
         }

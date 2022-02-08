@@ -1,7 +1,7 @@
-use std::any::Any;
 use crate::trie::nodes::node::{Node, NodeOption};
 use crate::trie::nodes::{node0::Node0, node16::Node16, node256::Node256};
 use arr_macro::arr;
+use std::any::Any;
 
 #[derive(Debug)]
 pub struct Node48 {
@@ -51,10 +51,9 @@ impl Node for Node48 {
             //if exists
             if let Some(key) = self.keys[cur_value_index] {
                 let key_index = key as usize;
-                let upgraded_node =  self.children[key_index]
+                let upgraded_node = self.children[key_index]
                     .as_mut()
-                    .map_or_else(| | Box::new(Node0::new()).add(rest),
-                                 |v| v.add(rest));
+                    .map_or_else(|| Box::new(Node0::new()).add(rest), |v| v.add(rest));
                 if upgraded_node.is_some() {
                     self.children[key_index] = upgraded_node;
                 }
@@ -114,8 +113,8 @@ impl Node for Node48 {
 
 #[cfg(test)]
 mod tests {
-    use crate::trie::nodes::node4::Node4;
     use super::*;
+    use crate::trie::nodes::node4::Node4;
 
     #[test]
     fn order_preserved_48_exact_match() {
@@ -131,16 +130,17 @@ mod tests {
         if let Some(n) = node {
             let node48 = n.as_any().downcast_ref::<Node48>().unwrap();
             for (i, &k) in node48.keys.iter().enumerate() {
-                if i < 96 { //only first entries 48 considered
+                if i < 96 {
+                    //only first entries 48 considered
                     match k {
                         None => {
                             assert_ne!(i % 2, 0);
-                        },
+                        }
                         Some(c) => {
                             assert_eq!(i % 2, 0);
                             assert!(matches!(&node48.children[c as usize], Some(_)));
-                        },
-                        _ => panic!()
+                        }
+                        _ => panic!(),
                     }
                 }
             }

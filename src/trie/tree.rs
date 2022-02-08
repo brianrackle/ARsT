@@ -22,13 +22,13 @@ impl Tree {
         if !value.is_empty() {
             let case_corrected = match self.case {
                 Case::Insensitve => value.to_lowercase(),
-                Case::Sensitive => String::from(value)
+                Case::Sensitive => String::from(value),
             };
 
-            let upgraded_node = self.root
-                .as_mut()
-                .map_or_else(| | Box::new(Node0::new()).add(case_corrected.as_bytes()),
-                             |v| v.add(case_corrected.as_bytes()));
+            let upgraded_node = self.root.as_mut().map_or_else(
+                || Box::new(Node0::new()).add(case_corrected.as_bytes()),
+                |v| v.add(case_corrected.as_bytes()),
+            );
             if upgraded_node.is_some() {
                 self.root = upgraded_node;
             }
@@ -38,7 +38,7 @@ impl Tree {
     pub fn exists(&self, value: &str) -> bool {
         let case_corrected = match self.case {
             Case::Insensitve => value.to_lowercase(),
-            Case::Sensitive => String::from(value)
+            Case::Sensitive => String::from(value),
         };
 
         if let Some(node) = self.root.as_ref() {
@@ -51,11 +51,11 @@ impl Tree {
 
 #[cfg(test)] //module should only be compiled for testing
 mod test {
+    use super::{Case, Match, Tree};
     use std::fs::File;
     use std::io;
     use std::io::{BufRead, BufReader, Lines};
     use std::path::PathBuf;
-    use super::{Case, Match, Tree};
 
     //doesnt check terminal char
     // fn only_has_chars(n: &OldNode, s: &str) -> bool {
@@ -101,7 +101,6 @@ mod test {
     //         root
     //     });
     // }
-
 
     #[test]
     fn add_string_chars_exist() {

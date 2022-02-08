@@ -2,15 +2,29 @@ use std::any::Any;
 
 use std::cmp::Ordering;
 use std::fmt::Debug;
+use crate::trie::nodes::node::NodeLocation::{Exists, Insert};
 
 //FIXME remove is_empty and any other unused method
 pub trait Node: Debug {
-    fn add(&mut self, values: &[u8]) -> NodeOption; //turn into default implementation
     fn is_full(&self) -> bool;
     fn is_empty(&self) -> bool;
     fn is_terminal(&self) -> bool;
-    fn exists(&self, values: &[u8]) -> bool;
+    fn set_terminal(&mut self, terminal: bool);
     fn as_any(&self) -> &dyn Any;
+    fn exists(&self, values: &[u8]) -> bool;
+
+    fn add(&mut self, values: &[u8]) -> NodeOption {
+        if let Some((first, rest)) = values.split_first() {
+            match &self.get_index(*first) {
+                Exists(index) => self.exists_add(index, rest),
+                Insert(index) => self.insert_add(index, *first, rest),
+                Upgrade => self.upgrade_add(values),
+            }
+        } else {
+            self.set_terminal(true);
+            None
+        }
+    }
 
     //TODO break into different trait
     fn get_index(&self, value: u8) -> NodeLocation;

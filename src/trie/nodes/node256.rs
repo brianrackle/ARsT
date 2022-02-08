@@ -43,19 +43,6 @@ impl Node256 {
 }
 
 impl Node for Node256 {
-    fn add(&mut self, values: &[u8]) -> NodeOption {
-        if let Some((first, rest)) = values.split_first() {
-            match &self.get_index(*first) {
-                Exists(index) => self.exists_add(index, rest),
-                Insert(index) => self.insert_add(index, *first, rest),
-                Upgrade => self.upgrade_add(values),
-            }
-        } else {
-            self.terminal = true;
-            None
-        }
-    }
-
     fn is_full(&self) -> bool {
         self.size == self.children.len()
     }
@@ -66,6 +53,14 @@ impl Node for Node256 {
 
     fn is_terminal(&self) -> bool {
         self.terminal
+    }
+
+    fn set_terminal(&mut self, terminal: bool) {
+        self.terminal = terminal
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 
     fn exists(&self, values: &[u8]) -> bool {
@@ -83,10 +78,6 @@ impl Node for Node256 {
         } else {
             self.terminal
         }
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
     }
 
     fn get_index(&self, value: u8) -> NodeLocation {
@@ -109,7 +100,8 @@ impl Node for Node256 {
     }
 
     fn insert_add(&mut self, index: &KeyChildIndex, first: u8, rest: &[u8]) -> NodeOption {
-        self.children[index.child] = Node0::new().add(rest);
+        let mut new_node = Node0::new();
+        self.children[index.child] = new_node.add(rest).or_else(|| Some(Box::new(new_node)));
         self.size += 1;
         None
     }
@@ -136,6 +128,8 @@ mod tests {
                 }
             }
         }
+
+        println!("{:#?}", node);
 
         if let Some(n) = node {
             let node256 = n.as_any().downcast_ref::<Node256>().unwrap();

@@ -46,19 +46,6 @@ impl Node48 {
 }
 
 impl Node for Node48 {
-    fn add(&mut self, values: &[u8]) -> NodeOption {
-        if let Some((first, rest)) = values.split_first() {
-            match &self.get_index(*first) {
-                Exists(index) => self.exists_add(index, rest),
-                Insert(index) => self.insert_add(index, *first, rest),
-                Upgrade => self.upgrade_add(values),
-            }
-        } else {
-            self.terminal = true;
-            None
-        }
-    }
-
     fn is_full(&self) -> bool {
         self.size == self.children.len()
     }
@@ -115,7 +102,9 @@ impl Node for Node48 {
 
     fn insert_add(&mut self, index: &KeyChildIndex, first: u8, rest: &[u8]) -> NodeOption {
         self.keys[index.key] = Some(self.size as u8); //FIXME this is the same as index.child
-        self.children[index.child] = Node0::new().add(rest);
+        let mut new_node = Node0::new();
+        self.children[index.child] = new_node.add(rest).or_else(|| Some(Box::new(new_node)));
+
         self.size += 1;
         None
     }
@@ -124,6 +113,10 @@ impl Node for Node48 {
         let mut upgraded_node = Node256::from(self);
         upgraded_node.add(values);
         Some(Box::new(upgraded_node))
+    }
+
+    fn set_terminal(&mut self, terminal: bool) {
+        self.terminal = terminal
     }
 }
 

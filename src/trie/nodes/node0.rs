@@ -1,6 +1,7 @@
 use crate::trie::nodes::node::{KeyChildIndex, Node, NodeLocation, NodeOption};
 use crate::trie::nodes::node4::Node4;
 use std::any::Any;
+use crate::trie::nodes::node::NodeLocation::{Exists, Insert};
 
 //FIXME performance and memory test storing children directly in keys
 #[derive(Debug)]
@@ -21,12 +22,6 @@ impl Default for Node0 {
 }
 
 impl Node for Node0 {
-    fn add(&mut self, values: &[u8]) -> NodeOption {
-        let mut new_node = Node4::from(self);
-        new_node.add(values);
-        Some(Box::new(new_node))
-    }
-
     fn is_full(&self) -> bool {
         true
     }
@@ -54,18 +49,24 @@ impl Node for Node0 {
     }
 
     fn get_index(&self, value: u8) -> NodeLocation {
-        todo!()
+        NodeLocation::Upgrade
     }
 
     fn exists_add(&mut self, index: &KeyChildIndex, rest: &[u8]) -> NodeOption {
-        todo!()
+        unimplemented!()
     }
 
     fn insert_add(&mut self, index: &KeyChildIndex, first: u8, rest: &[u8]) -> NodeOption {
-        todo!()
+        unimplemented!()
     }
 
     fn upgrade_add(&mut self, values: &[u8]) -> NodeOption {
-        todo!()
+        let mut new_node = Node4::from(self);
+        new_node.add(values);
+        Some(Box::new(new_node))
+    }
+
+    fn set_terminal(&mut self, terminal: bool) {
+        self.terminal = terminal
     }
 }

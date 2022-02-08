@@ -11,10 +11,12 @@ pub trait Node: Debug {
     fn is_terminal(&self) -> bool;
     fn exists(&self, values: &[u8]) -> bool;
     fn as_any(&self) -> &dyn Any;
-    //fn get_child_index(&self, value: u8) -> NodeLocation;
-    //existing_add
-    //insert_add
-    //upgrade_add
+
+    //TODO break into different trait
+    fn get_index(&self, value: u8) -> NodeLocation;
+    fn exists_add(&mut self, index: &KeyChildIndex, rest: &[u8]) -> NodeOption;
+    fn insert_add(&mut self, index: &KeyChildIndex, first: u8, rest: &[u8]) -> NodeOption;
+    fn upgrade_add(&mut self, values: &[u8]) -> NodeOption;
 }
 
 

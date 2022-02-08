@@ -50,8 +50,57 @@ impl Node16 {
         new_node.size = node.size;
         new_node
     }
+}
 
-    fn get_child_index(&self, value: u8) -> NodeLocation {
+impl Node for Node16 {
+    fn add(&mut self, values: &[u8]) -> NodeOption {
+        if let Some((first, rest)) = values.split_first() {
+            match &self.get_index(*first) {
+                Exists(index) => self.exists_add(index, rest),
+                Insert(index) => self.insert_add(index, *first, rest),
+                Upgrade => self.upgrade_add(values),
+            }
+        } else {
+            self.terminal = true;
+            None
+        }
+    }
+
+    fn is_full(&self) -> bool {
+        self.size == self.children.len()
+    }
+
+    fn is_empty(&self) -> bool {
+        self.size == 0
+    }
+
+    fn is_terminal(&self) -> bool {
+        self.terminal
+    }
+
+    //FIXME create utility methods for finding key index and child index to cleanup and reduce copy paste
+    fn exists(&self, values: &[u8]) -> bool {
+        if let Some((first, rest)) = values.split_first() {
+            match self.get_index(*first) {
+                Exists(index) => {
+                    if let Some(child) = self.children[index.child].as_ref() {
+                        child.exists(rest)
+                    } else {
+                        false
+                    }
+                }
+                _ => false
+            }
+        } else {
+            self.terminal
+        }
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn get_index(&self, value: u8) -> NodeLocation {
         match self.keys
             .binary_search_by(|probe| val_cmp(probe, &Some(value))) {
             Ok(index) => {
@@ -94,57 +143,5 @@ impl Node16 {
         let mut upgraded_node = Node48::from(self);
         upgraded_node.add(values);
         Some(Box::new(upgraded_node))
-    }
-}
-
-impl Node for Node16 {
-    fn add(&mut self, values: &[u8]) -> NodeOption {
-        if let Some((first, rest)) = values.split_first() {
-            match &self.get_child_index(*first) {
-                Exists(index) => self.exists_add(index, rest),
-                Insert(index) => self.insert_add(index, *first, rest),
-                Upgrade => self.upgrade_add(values),
-            }
-        } else {
-            self.terminal = true;
-            None
-        }
-    }
-
-    fn is_full(&self) -> bool {
-        self.size == self.children.len()
-    }
-
-    fn is_empty(&self) -> bool {
-        self.size == 0
-    }
-
-    fn is_terminal(&self) -> bool {
-        self.terminal
-    }
-
-    //FIXME create utility methods for finding key index and child index to cleanup and reduce copy paste
-    fn exists(&self, values: &[u8]) -> bool {
-        if let Some((first, rest)) = values.split_first() {
-            match self
-                .keys
-                .binary_search_by(|probe| val_cmp(probe, &Some(*first)))
-            {
-                Ok(index) => {
-                    if let Some(child) = self.children[index].as_ref() {
-                        child.exists(rest)
-                    } else {
-                        false
-                    }
-                }
-                Err(_) => false,
-            }
-        } else {
-            self.terminal
-        }
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
     }
 }

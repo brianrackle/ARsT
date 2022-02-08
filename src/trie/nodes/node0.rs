@@ -1,8 +1,8 @@
-use crate::trie::nodes::node::{Node, NodeOption};
+use crate::trie::nodes::node::{KeyChildIndex, Node, NodeLocation, NodeOption};
 use crate::trie::nodes::node4::Node4;
 use std::any::Any;
 
-//TODO performance and memory test storing children directly in keys
+//FIXME performance and memory test storing children directly in keys
 #[derive(Debug)]
 pub struct Node0 {
     pub(crate) terminal: bool,
@@ -51,5 +51,21 @@ impl Node for Node0 {
 
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn get_index(&self, value: u8) -> NodeLocation {
+        todo!()
+    }
+
+    fn exists_add(&mut self, index: &KeyChildIndex, rest: &[u8]) -> NodeOption {
+        todo!()
+    }
+
+    fn insert_add(&mut self, index: &KeyChildIndex, first: u8, rest: &[u8]) -> NodeOption {
+        todo!()
+    }
+
+    fn upgrade_add(&mut self, values: &[u8]) -> NodeOption {
+        todo!()
     }
 }

@@ -40,8 +40,56 @@ impl Node256 {
         new_node.size = node.size;
         new_node
     }
+}
 
-    fn get_child_index(&self, value: u8) -> NodeLocation {
+impl Node for Node256 {
+    fn add(&mut self, values: &[u8]) -> NodeOption {
+        if let Some((first, rest)) = values.split_first() {
+            match &self.get_index(*first) {
+                Exists(index) => self.exists_add(index, rest),
+                Insert(index) => self.insert_add(index, *first, rest),
+                Upgrade => self.upgrade_add(values),
+            }
+        } else {
+            self.terminal = true;
+            None
+        }
+    }
+
+    fn is_full(&self) -> bool {
+        self.size == self.children.len()
+    }
+
+    fn is_empty(&self) -> bool {
+        self.size == 0
+    }
+
+    fn is_terminal(&self) -> bool {
+        self.terminal
+    }
+
+    fn exists(&self, values: &[u8]) -> bool {
+        if let Some((first, rest)) = values.split_first() {
+            match self.get_index(*first) {
+                Exists(index) => {
+                    if let Some(child) = self.children[index.child].as_ref() {
+                        child.exists(rest)
+                    } else {
+                        false
+                    }
+                }
+                _ => false
+            }
+        } else {
+            self.terminal
+        }
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn get_index(&self, value: u8) -> NodeLocation {
         let cur_value_index = value as usize;
         if self.children[cur_value_index].is_some() {
             NodeLocation::Exists(KeyChildIndex{key: 0, child: cur_value_index})
@@ -68,55 +116,6 @@ impl Node256 {
 
     fn upgrade_add(&mut self, values: &[u8]) -> NodeOption {
         unimplemented!()
-    }
-}
-
-impl Node for Node256 {
-    fn add(&mut self, values: &[u8]) -> NodeOption {
-        if let Some((first, rest)) = values.split_first() {
-            match &self.get_child_index(*first) {
-                Exists(index) => self.exists_add(index, rest),
-                Insert(index) => self.insert_add(index, *first, rest),
-                Upgrade => self.upgrade_add(values),
-            }
-        } else {
-            self.terminal = true;
-            None
-        }
-    }
-
-    fn is_full(&self) -> bool {
-        self.size == self.children.len()
-    }
-
-    fn is_empty(&self) -> bool {
-        self.size == 0
-    }
-
-    fn is_terminal(&self) -> bool {
-        self.terminal
-    }
-
-    fn exists(&self, values: &[u8]) -> bool {
-        if let Some((first, rest)) = values.split_first() {
-            let cur_value_index = *first as usize;
-            //if exists
-            if self.children[cur_value_index].is_some() {
-                if let Some(child) = self.children[cur_value_index].as_ref() {
-                    child.exists(rest)
-                } else {
-                    false
-                }
-            } else {
-                false
-            }
-        } else {
-            self.terminal
-        }
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
     }
 }
 

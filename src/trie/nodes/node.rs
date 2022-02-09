@@ -2,7 +2,7 @@ use std::any::Any;
 
 use std::cmp::Ordering;
 use std::fmt::Debug;
-use crate::trie::nodes::node::NodeLocation::{Exists, Insert};
+use crate::trie::nodes::node::NodeLocation::{Exists, Insert, Upgrade};
 
 pub trait Node: Debug {
     fn is_full(&self) -> bool;

@@ -71,8 +71,9 @@ impl Node for Node4 {
     fn exists_add(&mut self, index: &KeyChildIndex, rest: &[u8]) -> NodeOption {
         //if None create Node0 and add rest, if Some add content
         let upgraded_node = self.children[index.child]
+            .get_or_insert_with(|| Box::new(Node0::new()))
             .as_mut()
-            .map_or_else(|| Box::new(Node0::new()).add(rest), |v| v.add(rest));
+            .add(rest);
         if upgraded_node.is_some() {
             self.children[index.child] = upgraded_node;
         }
@@ -84,7 +85,6 @@ impl Node for Node4 {
         self.keys[index.key] = Some(first);
         let mut new_node = Node0::new();
         self.children[index.child] = new_node.add(rest).or_else(|| Some(Box::new(new_node)));
-        // self.children[index.child] = Node0::new().add(rest); //FIXME doesnt work if its a terminal node
         self.size += 1;
         None
     }

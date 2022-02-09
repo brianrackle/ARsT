@@ -34,14 +34,9 @@ impl Node for Node0 {
         self.terminal
     }
 
-    //TODO test looking for word shorter, same, and longer than what tree has
-    fn exists(&self, values: &[u8]) -> bool {
-        //if more values exists then a match cant exist
-        if let Some((_first, _rest)) = values.split_first() {
-            false
-        } else {
-            self.terminal
-        }
+
+    fn set_terminal(&mut self, terminal: bool) {
+        self.terminal = terminal
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -50,6 +45,10 @@ impl Node for Node0 {
 
     fn get_index(&self, value: u8) -> NodeLocation {
         NodeLocation::Upgrade
+    }
+
+    fn get_child(&self, index: usize) -> Option<&Box<dyn Node>> {
+        None.as_ref()
     }
 
     fn exists_add(&mut self, index: &KeyChildIndex, rest: &[u8]) -> NodeOption {
@@ -64,13 +63,5 @@ impl Node for Node0 {
         let mut new_node = Node4::from(self);
         new_node.add(values);
         Some(Box::new(new_node))
-    }
-
-    fn set_terminal(&mut self, terminal: bool) {
-        self.terminal = terminal
-    }
-
-    fn get_child(&self, index: usize) -> Option<&Box<dyn Node>> {
-        None.as_ref()
     }
 }

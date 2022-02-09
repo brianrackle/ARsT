@@ -48,23 +48,6 @@ impl Node for Node4 {
         self.terminal
     }
 
-    fn exists(&self, values: &[u8]) -> bool {
-        if let Some((first, rest)) = values.split_first() {
-            match self.get_index(*first) {
-                Exists(index) => {
-                    if let Some(child) = self.children[index.child].as_ref() {
-                        child.exists(rest)
-                    } else {
-                        false
-                    }
-                }
-                _ => false
-            }
-        } else {
-            self.terminal
-        }
-    }
-
     fn as_any(&self) -> &dyn Any {
         self
     }

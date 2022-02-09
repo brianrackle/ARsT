@@ -6,15 +6,19 @@ pub struct Tree {
     matching: Match,
     case: Case,
     root: NodeOption,
+    compress: bool,
 }
 
-//TODO: add fn options() for discovering autocomplete options
+//TODO add support for compressions of single child nodes
+//TODO add support for arbitrary indexing implementation
+//TODO add fn options() for discovering autocomplete options
 impl Tree {
-    pub fn new(matching: Match, case: Case) -> Self {
+    pub fn new(matching: Match, case: Case, compress: bool) -> Self {
         Tree {
             matching,
             case,
             root: NodeOption::default(),
+            compress
         }
     }
 
@@ -80,7 +84,7 @@ mod test {
 
     #[test]
     fn test_building_english_dictionary() {
-        let mut tree = Tree::new(Match::Exact, Case::Insensitve);
+        let mut tree = Tree::new(Match::Exact, Case::Insensitve, false);
 
         let dict = english_dict().map(|l| l.unwrap()).collect::<Vec<_>>();
         for word in &dict {
@@ -90,6 +94,9 @@ mod test {
         for word in &dict {
             assert!(tree.exists(word));
         }
+
+        assert!(!tree.exists("bodie"));
+        assert!(!tree.exists("bodiess"));
     }
 
     // #[bench]

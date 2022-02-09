@@ -137,7 +137,6 @@ mod tests {
                             assert_eq!(i % 2, 0);
                             assert!(matches!(&node48.children[c as usize], Some(_)));
                         }
-                        _ => panic!(),
                     }
                 }
             }

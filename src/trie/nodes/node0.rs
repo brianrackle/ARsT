@@ -1,7 +1,6 @@
 use crate::trie::nodes::node::{KeyChildIndex, Node, NodeLocation, NodeOption};
 use crate::trie::nodes::node4::Node4;
 use std::any::Any;
-use crate::trie::nodes::node::NodeLocation::{Exists, Insert};
 
 //TODO performance and memory test storing children directly in keys
 #[derive(Debug)]

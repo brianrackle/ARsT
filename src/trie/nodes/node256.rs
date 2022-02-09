@@ -2,7 +2,6 @@ use crate::trie::nodes::node::{KeyChildIndex, Node, NodeLocation, NodeOption};
 use crate::trie::nodes::{node0::Node0, node48::Node48};
 use arr_macro::arr;
 use std::any::Any;
-use crate::trie::nodes::node::NodeLocation::{Exists, Insert};
 
 #[derive(Debug)]
 pub struct Node256 {
@@ -125,7 +124,6 @@ mod tests {
                 match &c {
                     None => assert_ne!(i % 2, 0),
                     Some(_) => assert_eq!(i % 2, 0),
-                    _ => panic!(),
                 }
             }
         }

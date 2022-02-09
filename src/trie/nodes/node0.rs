@@ -3,7 +3,7 @@ use crate::trie::nodes::node4::Node4;
 use std::any::Any;
 use crate::trie::nodes::node::NodeLocation::{Exists, Insert};
 
-//FIXME performance and memory test storing children directly in keys
+//TODO performance and memory test storing children directly in keys
 #[derive(Debug)]
 pub struct Node0 {
     pub(crate) terminal: bool,
@@ -34,7 +34,7 @@ impl Node for Node0 {
         self.terminal
     }
 
-    //FIXME test looking for word shorter, same, and longer than what tree has
+    //TODO test looking for word shorter, same, and longer than what tree has
     fn exists(&self, values: &[u8]) -> bool {
         //if more values exists then a match cant exist
         if let Some((_first, _rest)) = values.split_first() {
@@ -68,5 +68,9 @@ impl Node for Node0 {
 
     fn set_terminal(&mut self, terminal: bool) {
         self.terminal = terminal
+    }
+
+    fn get_child(&self, index: usize) -> Option<&Box<dyn Node>> {
+        None.as_ref()
     }
 }

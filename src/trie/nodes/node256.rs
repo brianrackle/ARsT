@@ -63,23 +63,6 @@ impl Node for Node256 {
         self
     }
 
-    fn exists(&self, values: &[u8]) -> bool {
-        if let Some((first, rest)) = values.split_first() {
-            match self.get_index(*first) {
-                Exists(index) => {
-                    if let Some(child) = self.children[index.child].as_ref() {
-                        child.exists(rest)
-                    } else {
-                        false
-                    }
-                }
-                _ => false
-            }
-        } else {
-            self.terminal
-        }
-    }
-
     fn get_index(&self, value: u8) -> NodeLocation {
         let cur_value_index = value as usize;
         if self.children[cur_value_index].is_some() {
@@ -87,6 +70,10 @@ impl Node for Node256 {
         } else {
             NodeLocation::Insert(KeyChildIndex{key: 0, child: cur_value_index})
         }
+    }
+
+    fn get_child(&self, index: usize) -> Option<&Box<dyn Node>> {
+        self.children[index].as_ref()
     }
 
     fn exists_add(&mut self, index: &KeyChildIndex, rest: &[u8]) -> NodeOption {

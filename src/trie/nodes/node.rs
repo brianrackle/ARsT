@@ -4,14 +4,12 @@ use std::cmp::Ordering;
 use std::fmt::Debug;
 use crate::trie::nodes::node::NodeLocation::{Exists, Insert};
 
-//FIXME remove is_empty and any other unused method
 pub trait Node: Debug {
     fn is_full(&self) -> bool;
     fn is_empty(&self) -> bool;
     fn is_terminal(&self) -> bool;
     fn set_terminal(&mut self, terminal: bool);
     fn as_any(&self) -> &dyn Any;
-    fn exists(&self, values: &[u8]) -> bool;
 
     fn add(&mut self, values: &[u8]) -> NodeOption {
         if let Some((first, rest)) = values.split_first() {
@@ -26,8 +24,26 @@ pub trait Node: Debug {
         }
     }
 
+    fn exists(&self, values: &[u8]) -> bool {
+        if let Some((first, rest)) = values.split_first() {
+            match self.get_index(*first) {
+                Exists(index) => {
+                    if let Some(child) = self.get_child(index.child) {
+                        child.exists(rest)
+                    } else {
+                        false
+                    }
+                }
+                _ => false
+            }
+        } else {
+            self.is_terminal()
+        }
+    }
+
     //TODO break into different trait
     fn get_index(&self, value: u8) -> NodeLocation;
+    fn get_child(&self, index: usize) -> Option<&Box<dyn Node>>;
     fn exists_add(&mut self, index: &KeyChildIndex, rest: &[u8]) -> NodeOption;
     fn insert_add(&mut self, index: &KeyChildIndex, first: u8, rest: &[u8]) -> NodeOption;
     fn upgrade_add(&mut self, values: &[u8]) -> NodeOption;

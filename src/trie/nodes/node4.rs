@@ -81,6 +81,10 @@ impl Node for Node4 {
         }
     }
 
+    fn get_child(&self, index: usize) -> Option<&Box<dyn Node>> {
+        self.children[index].as_ref()
+    }
+
     fn exists_add(&mut self, index: &KeyChildIndex, rest: &[u8]) -> NodeOption {
         //if None create Node0 and add rest, if Some add content
         let upgraded_node = self.children[index.child]

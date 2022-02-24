@@ -33,7 +33,6 @@ impl Node for Node0 {
         self.terminal
     }
 
-
     fn set_terminal(&mut self, terminal: bool) {
         self.terminal = terminal
     }

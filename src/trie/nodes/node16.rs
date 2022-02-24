@@ -65,6 +65,10 @@ impl Node for Node16 {
         self.terminal
     }
 
+    fn set_terminal(&mut self, terminal: bool) {
+        self.terminal = terminal
+    }
+
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -118,9 +122,5 @@ impl Node for Node16 {
         let mut upgraded_node = Node48::from(self);
         upgraded_node.add(values);
         Some(Box::new(upgraded_node))
-    }
-
-    fn set_terminal(&mut self, terminal: bool) {
-        self.terminal = terminal
     }
 }

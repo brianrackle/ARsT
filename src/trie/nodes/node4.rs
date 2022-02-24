@@ -12,6 +12,18 @@ pub struct Node4 {
     pub(crate) terminal: bool,
 }
 
+//compression ->
+// keys: [Option<Vec<u8>>;4]
+// children: [NodeOption; 4]
+// [[1,2,3] -> terminal true == "123", [4] -> terminal true, [5] -> terminal true, [6,2,3] -> terminal false == "6234" "6235" "62367"]
+//if get_child(value.rest.first) == None
+//then store as compressed
+// need to think how terminal will be handled with compression. How will terminal be migrated when expanding a compressed node
+// a terminal node will always be pointed to by a compressed node, so decompressing will retain the terminal node as the leaf
+//make node a generic that implements u8 (uncompressed), and vec<u8> (compressed)
+//How to have both uncompressed and compressed in a single array
+//optional: can add expand and collapse method to tree
+
 impl Node4 {
     pub fn new() -> Self {
         Node4 {
@@ -27,6 +39,9 @@ impl Node4 {
         new_node.terminal = node.terminal;
         new_node
     }
+
+    //TODO add extension capabilities to node which would allow compression and indexing
+    // maybe have a pre-processing and post-processing capabilities along with arbitrary data storage per node
 }
 
 impl Default for Node4 {
@@ -46,6 +61,10 @@ impl Node for Node4 {
 
     fn is_terminal(&self) -> bool {
         self.terminal
+    }
+
+    fn set_terminal(&mut self, terminal: bool) {
+        self.terminal = terminal
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -94,10 +113,6 @@ impl Node for Node4 {
         let mut upgraded_node = Node16::from(self);
         upgraded_node.add(values);
         Some(Box::new(upgraded_node))
-    }
-
-    fn set_terminal(&mut self, terminal: bool) {
-        self.terminal = terminal
     }
 }
 

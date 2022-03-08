@@ -2,6 +2,13 @@ use crate::trie::enums::{Case, Match};
 use crate::trie::nodes::node::{Node, NodeOption};
 use crate::trie::nodes::node0::Node0;
 
+//https://db.in.tum.de/~leis/papers/ART.pdf
+// [x] Trie
+// [x] Adaptive
+// [ ] Compression
+// [ ] Key stored at leaf
+// [ ] Expansion
+// [ ] Leaf Nodes
 pub struct Tree {
     matching: Match,
     case: Case,
